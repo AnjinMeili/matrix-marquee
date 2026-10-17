@@ -38,6 +38,7 @@ release="/opt/protest/releases/$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -m 0755 "$release"
 rsync -a --delete \
     --exclude='.git/' --exclude='.env' --exclude='*.env' --exclude='.venv/' \
+    --exclude='.pytest_cache/' --exclude='__pycache__/' \
     --exclude='backups/' --exclude='bundles/' "$SOURCE_DIR/" "$release/"
 
 python3 -m venv "$release/.venv"
@@ -55,7 +56,8 @@ if ls /opt/protest/wheels/rgbmatrix-*.whl >/dev/null 2>&1; then
     "$release/.venv/bin/pip" install --disable-pip-version-check --no-input \
         /opt/protest/wheels/rgbmatrix-*.whl
 else
-    echo "warning: no rgbmatrix wheel in /opt/protest/wheels; matrix will run in mock mode" >&2
+    echo "warning: no rgbmatrix wheel in /opt/protest/wheels; run scripts/build-rgbmatrix.sh," \
+        "or the matrix is reported unavailable in hardware mode" >&2
 fi
 
 if [ ! -e /etc/protest/protest.env ]; then

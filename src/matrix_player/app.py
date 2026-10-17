@@ -56,12 +56,32 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, default=str, separators=(",", ":"))
 
 
+# The phone UI polls these several times a second; logging every poll would
+# flood the journal and bury the events that matter.
+POLLING_PATHS = ("/api/playback/frame", "/api/playback/state", "/api/status", "/health")
+
+
+class PollingAccessFilter(logging.Filter):
+    """Drops successful uvicorn access-log lines for routine polling requests."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args if isinstance(record.args, tuple) else ()
+        if len(args) >= 5:
+            path, status = str(args[2]).split("?", 1)[0], args[4]
+            if path in POLLING_PATHS and isinstance(status, int) and status < 400:
+                return False
+        return True
+
+
 def configure_logging(level: str) -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level)
+    access = logging.getLogger("uvicorn.access")
+    if not any(isinstance(existing, PollingAccessFilter) for existing in access.filters):
+        access.addFilter(PollingAccessFilter())
 
 
 def create_app(

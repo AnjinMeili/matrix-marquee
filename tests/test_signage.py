@@ -658,3 +658,32 @@ def test_edit_pane_player_for_animations(tmp_path: Path) -> None:
             assert proxy.is_file()
             client.delete(f"/api/media/{moving['id']}")
             assert not proxy.exists()
+
+
+def test_polling_requests_stay_out_of_the_access_log() -> None:
+    import logging
+
+    from matrix_player.app import PollingAccessFilter
+
+    def record(path: str, status: int) -> logging.LogRecord:
+        return logging.LogRecord(
+            "uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d',
+            ("10.42.0.5:5000", "GET", path, "1.1", status), None,
+        )
+
+    keep = PollingAccessFilter().filter
+    assert not keep(record("/api/playback/frame?t=123", 200))
+    assert not keep(record("/api/status", 200))
+    assert keep(record("/api/playback/frame?t=123", 503))  # failures still show
+    assert keep(record("/api/media", 200))
+    assert keep(record("/api/playback/send", 200))
+
+
+def test_sending_a_disabled_playlist_is_refused_like_starting_it(tmp_path: Path) -> None:
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=MockMatrixAdapter())) as client:
+        playlist = client.post("/api/playlists", json={"name": "Off", "is_enabled": False}).json()
+        panel = add_panel(client, "HI")
+        add_item(client, playlist["id"], item_type="text_panel", text_panel_id=panel["id"])
+        sent = client.post("/api/playback/send", json={"target_type": "playlist", "target_id": playlist["id"]})
+        assert sent.status_code == 409
+        assert client.post("/api/playback/send", json={"target_type": "playlist", "target_id": 999}).status_code == 404

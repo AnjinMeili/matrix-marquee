@@ -22,6 +22,14 @@ def playback_state(playback: PlaybackController = Depends(get_playback)) -> Play
     return playback.state()
 
 
+def _require_playable(database: Database, playlist_id: int) -> None:
+    row = database.fetch_one("SELECT id, is_enabled FROM playlists WHERE id = ?", (playlist_id,))
+    if row is None:
+        raise HTTPException(status_code=404, detail="playlist not found")
+    if not row["is_enabled"]:
+        raise HTTPException(status_code=409, detail="playlist is disabled")
+
+
 @router.post("/start", response_model=PlaybackState)
 def start(
     command: PlaybackCommand,
@@ -30,13 +38,7 @@ def start(
 ) -> PlaybackState:
     if command.playlist_id is None:
         raise HTTPException(status_code=422, detail="playlist_id is required")
-    row = database.fetch_one(
-        "SELECT id, is_enabled FROM playlists WHERE id = ?", (command.playlist_id,)
-    )
-    if row is None:
-        raise HTTPException(status_code=404, detail="playlist not found")
-    if not row["is_enabled"]:
-        raise HTTPException(status_code=409, detail="playlist is disabled")
+    _require_playable(database, command.playlist_id)
     try:
         state = playback.start(command.playlist_id, from_start=command.from_start)
     except PlaybackError as error:
@@ -66,9 +68,12 @@ def current_frame(request: Request) -> Response:
 @router.post("/send", response_model=PlaybackState)
 def send(
     command: SendCommand,
+    database: Database = Depends(get_database),
     playback: PlaybackController = Depends(get_playback),
 ) -> PlaybackState:
     """Interrupts playback to show one item until the viewer releases it."""
+    if command.target_type == "playlist":
+        _require_playable(database, command.target_id)
     try:
         if command.target_type == "playlist":
             state = playback.start(command.target_id)

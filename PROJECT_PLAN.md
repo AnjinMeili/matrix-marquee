@@ -184,6 +184,8 @@ Keep the matrix adapter behind an interface so development can run with a mock r
 
 ## 5. API outline
 
+This is the original plan. The running service documents the current API at `/api/docs`; it has grown to include sending items, live frames, previews, tags, backups, and log downloads.
+
 ### System
 
 - `GET /api/status`
@@ -250,6 +252,8 @@ The scheduler should resolve each playlist item into a frame source, render it a
 10. Pixel dissolve
 
 Transitions should degrade to a cut if the source cannot provide frames quickly enough. The UI should show that fallback as a warning rather than failing the whole playlist.
+
+**As built:** all ten are available, plus comic slam (`impact`), camera flash, and a pixel morph. "Fade in" is the cross-fade (`fade`) and "fade out" fades through black (`fade_out`). Late transition frames are dropped to keep time rather than falling back to a cut, and an item that fails is skipped with a warning on the Sign page.
 
 ### Media rules
 
@@ -399,12 +403,26 @@ The static browser mockup is in [mockup.html](./mockup.html). Open it directly i
 - [ ] Stop always blanks the matrix safely.
 - [ ] Errors are visible in the UI and logs.
 
-## 12. Decisions to confirm before implementation
+## 12. Decisions
 
-1. Exact matrix width, height, panel count, scan rate, and color order.
-2. Preferred Pi OS image and networking stack.
-3. Maximum upload size and supported video codecs.
-4. Whether “time to view” and “number of repeats” are mutually exclusive or can both apply.
-5. Whether playlist preview means a browser simulation, a live matrix preview, or both.
-6. Desired default brightness and whether brightness should be scheduleable.
-7. Whether media deletion should be blocked when an item is referenced by a playlist.
+The questions this section originally listed have been settled as follows:
+
+1. **Matrix:** 96x64 viewing area from three parallel 64x32 panels, using the confirmed driver flags with the `Rotate:90` mapper.
+2. **OS and networking:** DietPi (Debian 13). `hostapd` and `dnsmasq` serve the AP on `wlan0`, and DietPi's network manager stays in charge of `eth0`.
+3. **Uploads:** 250 MiB limit. JPEG, PNG, WebP, GIF, MP4, WebM, and MOV are accepted. Videos are validated with ffprobe and played from a small H.264 copy made in the background.
+4. **Time vs. repeats:** set per item. Still pictures and messages show for a time; animations either loop to fill a time or play N whole times. Scrolling text always gets at least one full pass.
+5. **Preview:** both. Browser previews of messages, items, and playlist run-throughs are rendered by the sign's own engine, and the Sign page mirrors the live panel.
+6. **Brightness:** not configurable yet (see below).
+7. **Deleting referenced media:** blocked while a playlist item or message background uses it.
+
+## 13. Status and open items
+
+Built beyond the MVP list: text effects and colour styles, bundled display fonts, play modes (loop, shuffle, random, once) with resume, media tags and grouping, a whole-sign backup download, and a live panel mirror.
+
+Not built yet:
+
+- **Upstream internet through a phone.** A phone joined to the sign's Wi-Fi cannot share its connection back over the same link. This needs USB tethering or a second Wi-Fi adapter joining the phone's hotspot, plus NAT.
+- **Access control.** The Wi-Fi passphrase is the only protection.
+- **Brightness** and scheduling.
+- **Restoring a backup from the web UI.** The README documents the manual steps.
+- **Drag-and-drop reordering.** Items move with up/down buttons.

@@ -1,47 +1,70 @@
 # Protest RGB Matrix Appliance
 
-DietPi appliance software for a Raspberry Pi 4 driving an RGB LED matrix. The
-application remains usable offline and can expose its UI through a guarded,
-optional Wi-Fi AP/captive portal.
+DietPi appliance software for a Raspberry Pi 4 driving a 96x64 RGB LED matrix
+as a protest sign. Everything is controlled from a phone over the sign's own
+Wi-Fi; no internet connection is needed.
+
+## What it does
+
+- **Messages** — big, bold text that sizes itself to fill the sign. Bundled
+  display fonts, outline, bold and italic, colour styles (solid, rainbow,
+  plasma, changing colours, fire), motion (scroll either way, pulse, shake,
+  flash, comic POW, punch-in) with a speed setting, animated borders, and text
+  over a background picture. One-tap looks (Protest, Comic POW, Alarm, …).
+- **Pictures and videos** — JPEG, PNG, WebP, GIF, MP4, WebM, and iPhone MOV.
+  Items can be renamed and tagged; tags filter and search the library and add
+  whole groups to a playlist.
+- **Playlists** — per-item time or "play the animation N times", entrance
+  effects (comic slam, morph, camera flash, push, fade, zoom, …), and play
+  modes (in order, shuffle, random, stop at the end). Playlists pick up where
+  they left off after a reboot, a stop, or showing something on its own.
+- **Previews** — every editor previews with the sign's own renderer before
+  saving, and the Sign page mirrors the panel live.
+- **Keeps running** — an item that cannot play is skipped and reported on the
+  Sign page; the rest of the playlist carries on.
+
+## Using it from a phone
+
+Join the sign's Wi-Fi; the sign-in window opens the control page. It also
+answers at the AP address (default `http://10.42.0.1`) and on the wired
+address.
+
+The iPhone sign-in window is limited: it cannot save downloads. Open the page
+in Safari to download a backup or log bundle. After a software update, reload
+the page.
 
 ## Install and deploy
 
-The appliance currently runs as root because the matrix driver needs direct
-hardware access. The systemd sandbox still restricts filesystem writes to
-`/var/lib/protest` and `/var/log/protest`. Review `scripts/install.sh` before
-use, then install locally on DietPi:
+The appliance runs as root because the matrix driver needs direct hardware
+access. The systemd unit still limits filesystem writes to `/var/lib/protest`
+and `/var/log/protest`.
 
-```sh
-sudo scripts/install.sh
-```
-
-For auditable, non-interactive deployment from an operator machine:
+From an operator machine (non-interactive, auditable):
 
 ```sh
 scripts/deploy.sh --host 192.168.1.194 --user root
 ```
 
 The host is configurable by `--host` or `PROTEST_DEPLOY_HOST`. SSH uses batch
-mode and strict host-key checking. Deployment never transfers `.env`, runtime
-data, media, or credentials. It creates timestamped releases under
-`/opt/protest/releases` and atomically updates `/opt/protest/current`.
+mode and strict host-key checking. Deployment never transfers `.env` files,
+runtime data, media, or credentials. Each deploy creates a timestamped release
+under `/opt/protest/releases`, atomically repoints `/opt/protest/current`, and
+keeps the newest five releases (`KEEP_RELEASES`).
 
-Copy `.env.example` to `/etc/protest/protest.env`, mode `0600`, and adjust the
-application module if needed. The configured viewing area is 96x64. The
-hardware driver uses the supplied initialization string, whose raw framebuffer
-is 64x96 and is rotated by the configured mapper:
+The first install needs internet access on the Pi: it installs `ffmpeg` and
+`fonts-dejavu-core` with apt and the Python dependencies (including NumPy)
+with pip. Later deploys can add `--skip-os-packages`.
 
-```text
---led-rows=32 --led-cols=64 --led-chain=1 --led-parallel=3
---led-multiplexing=1 --led-pixel-mapper=Rotate:90
---led-pwm-lsb-nanoseconds=160 --led-slowdown-gpio=2
+The matrix bindings are built once on the Pi and cached as a wheel that every
+release reuses:
+
+```sh
+sudo scripts/build-rgbmatrix.sh
 ```
 
-Set `MATRIX_PLAYER_MATRIX_MODE=hardware` to use the attached matrix, or `mock`
-for UI and API development without GPIO output. Set
-`MATRIX_PLAYER_AUTOPLAY_DEFAULT=true` to start the enabled playlist marked as
-default whenever the service starts. Leave autoplay disabled while provisioning
-if the matrix should remain blank across service restarts.
+Rebuild it after a Pillow upgrade: the bindings compile against Pillow's
+headers. Without the wheel the service runs with the matrix reported as
+unavailable while the web UI stays usable.
 
 Common operations:
 
@@ -51,6 +74,53 @@ journalctl -u protest -f
 scripts/health-check.sh
 systemctl restart protest
 ```
+
+## Configuration
+
+Copy `.env.example` to `/etc/protest/protest.env` (mode `0600`); deploys never
+overwrite it. Notable settings:
+
+- `MATRIX_PLAYER_MATRIX_MODE` — `hardware` drives the panel, `mock` runs
+  without GPIO for UI and API development.
+- `MATRIX_PLAYER_AUTOPLAY_DEFAULT=true` — play the enabled default playlist at
+  boot. Leave it off while provisioning if the panel should stay blank.
+- `MATRIX_PLAYER_MAX_UPLOAD_BYTES` — upload size limit (default 250 MiB).
+  Uploads are also refused while free storage is below 200 MiB, checked
+  before and during each upload.
+- `MATRIX_PLAYER_AP_SSID`, `MATRIX_PLAYER_AP_ACTIVE`,
+  `MATRIX_PLAYER_UPSTREAM_INTERFACE` — shown in the UI only.
+
+The viewing area is 96x64. The driver uses the supplied initialization
+string, whose raw framebuffer is 64x96 and is rotated by the configured
+mapper:
+
+```text
+--led-rows=32 --led-cols=64 --led-chain=1 --led-parallel=3
+--led-multiplexing=1 --led-pixel-mapper=Rotate:90
+--led-pwm-lsb-nanoseconds=160 --led-slowdown-gpio=2
+```
+
+### Display tuning
+
+Reserve CPU core 3 for the panel refresh thread to reduce flicker: append
+`isolcpus=3` to the single line in `/boot/firmware/cmdline.txt` and reboot.
+The matrix library logs a reminder at startup until this is set. Frames are
+drawn off-screen and swapped on vsync, so motion does not tear.
+
+## Media handling
+
+- Pictures are checked with Pillow; a GIF with a single frame is stored and
+  played as a still picture. A one-off startup check applies this to media
+  uploaded before the check existed (marker:
+  `/var/lib/protest/.gif-animation-check-v1`).
+- Videos are checked with ffprobe and get a thumbnail. Phone video is too
+  heavy to decode live on a Pi, so each video gets a small upright H.264
+  playback copy (`<name>.play.mp4`, up to 320 px and 30 fps), built in the
+  background at low priority. Until it exists the original plays, as fast as
+  the Pi can decode it.
+- Animated GIFs play frame by frame from the original on the sign. For the
+  phone's player, a GIF gets an MP4 copy the first time it is opened.
+- Deleting media that a playlist or message background uses is refused.
 
 ## Wi-Fi AP and captive portal
 
@@ -74,51 +144,81 @@ scripts/setup-ap.sh --apply --acknowledge-network-change
 The script validates inputs and configuration, refuses an interface with an
 IPv4 address/default route or an existing AP-subnet route, backs up replaced
 files, and only then installs a narrowly scoped interface unit and enables
-`hostapd` and `dnsmasq`. It does not replace DietPi's network manager. Wildcard
-DNS points clients to the local portal. The application must serve captive
-detection routes and HTTP on the AP address. NAT/upstream sharing is
-deliberately not enabled; add it only after an operator has identified and
-secured an upstream interface.
+`hostapd` and `dnsmasq`. It does not replace DietPi's network manager.
+Wildcard DNS points clients to the local portal, and the application answers
+the captive-portal checks of iOS, Android, and Windows. NAT/upstream sharing
+is deliberately not enabled; add it only after an operator has identified and
+secured an upstream interface. Note that a phone joined to the sign's Wi-Fi
+cannot also share its own connection over that link; upstream would need USB
+tethering or a second Wi-Fi adapter joining the phone's hotspot.
+
+There is no login: anyone who knows the Wi-Fi passphrase, or can reach the
+wired address, can control the sign. Choose the passphrase accordingly.
 
 To recover, connect locally; disable `hostapd`, `dnsmasq`, and
 `protest-ap-interface`; remove their three generated configuration/unit files;
 restore files from the reported `/var/backups/protest/network-*` directory;
 then reload systemd and restart the prior network manager.
 
-## Logs, backups, and incident data
+## Backups, logs, and incident data
 
-Journald is persistent, compressed, capped at 256 MiB, and retained up to 30
-days. Application file logs under `/var/log/protest` rotate daily for 30
-rotations. Application logs must never include credentials, request bodies,
-uploaded text/content, or original filenames; use event IDs and media IDs.
+There are three different archives:
 
-Create a configuration-only backup (no secrets, DB, logs, or user content):
+| Archive | Contains | Made by |
+|---|---|---|
+| Full backup | database, every original picture and video, thumbnails, manifest | **Settings → Back up everything** (saved on the requesting device) |
+| Configuration backup | systemd, journald, logrotate, and deploy files only | `sudo scripts/backup.sh` |
+| Log bundle | redacted service logs | **Settings → Download log bundle**, or `scripts/log-bundle.sh` |
+
+The full backup is built on the data disk and deleted once sent. It never
+includes configuration, Wi-Fi passwords, or the rebuildable playback copies.
+To restore it, stop the service, copy `database/` and `media/` (and optionally
+`thumbnails/`) from the zip over the matching paths in `/var/lib/protest`, and
+start the service; playback copies are rebuilt automatically.
 
 ```sh
 sudo scripts/backup.sh
-```
-
-Create a diagnostics bundle with bounded journals and defensive redaction:
-
-```sh
 sudo LOG_SINCE='2 hours ago' scripts/log-bundle.sh
 ```
 
-Both outputs are mode `0600` under `/var/backups/protest`. Review a bundle
-before sharing it. Uploaded media, environment files, AP credentials,
-databases, and application content are never included.
+Script outputs are mode `0600` under `/var/backups/protest`. Review a log
+bundle before sharing it.
+
+Journald is persistent, compressed, capped at 256 MiB, and retained up to 30
+days. Application logs are single-line JSON with event names and IDs; they
+must never include credentials, request bodies, message text, or original
+filenames. The phone UI's routine polling (live mirror, status, health) is
+left out of the access log so it cannot flood the journal; failed polls are
+still logged. The Settings log download leaves out DNS query logs because
+they show what visitors browse; `scripts/log-bundle.sh` includes them for
+network troubleshooting, which is one more reason to review it before sharing.
 
 ## Updating and rollback
 
-Re-run `deploy.sh` for an atomic release update. To roll back:
+Re-run `deploy.sh` for an atomic release update. Database changes are
+additive (new tables and columns), so it is worth copying
+`/var/lib/protest/matrix-player.sqlite3` to `/var/backups/protest/` before an
+update, but an older release still runs against a newer database. To roll
+back:
 
 ```sh
 ln -sfn /opt/protest/releases/<previous-timestamp> /opt/protest/current
 systemctl restart protest
 ```
 
-Before maintenance, run the health check and configuration backup. After an
-update, inspect `systemctl status protest`, run `scripts/health-check.sh`, and
-confirm the matrix blanks safely when playback stops. Do not expose the HTTP
-service to an untrusted network; the offline AP UI has no assumption of remote
-access.
+After an update, check `systemctl status protest`, run
+`scripts/health-check.sh`, and confirm the matrix blanks safely when playback
+stops.
+
+## Development
+
+```sh
+python3 -m venv .venv && .venv/bin/pip install -e '.[test]'
+MATRIX_PLAYER_MATRIX_MODE=mock MATRIX_PLAYER_DATA_DIR=./data \
+    .venv/bin/uvicorn matrix_player.app:app --port 8000
+.venv/bin/python -m pytest
+```
+
+Mock mode needs no GPIO. Tests that need `ffmpeg` are skipped when it is not
+installed. The web UI is plain HTML, CSS, and JavaScript with no build step
+and no external assets, so it works offline.

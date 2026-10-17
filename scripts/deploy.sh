@@ -43,6 +43,7 @@ REMOTE="/root/protest-deploy"
 # shellcheck disable=SC2086
 rsync -az --delete -e "ssh $SSH_ARGS" \
     --exclude='.git/' --exclude='.env' --exclude='*.env' --exclude='.venv/' \
+    --exclude='.pytest_cache/' --exclude='__pycache__/' \
     --exclude='backups/' --exclude='bundles/' --exclude='media/' \
     "$ROOT/" "$USER@$HOST:$REMOTE/"
 # shellcheck disable=SC2086
