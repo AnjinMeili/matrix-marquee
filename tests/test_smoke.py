@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 import time
 
@@ -135,3 +136,32 @@ def test_playback_service_emits_frames_at_matrix_size_and_blanks_on_stop() -> No
     assert shown, "playback produced no frames"
     assert set(shown) == {(96, 64)}
     assert matrix.frame.getbbox() is None
+
+
+def test_default_playlist_autoplays_on_startup_when_enabled(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    with TestClient(create_app(settings, matrix_adapter=MockMatrixAdapter())) as client:
+        panel = client.post(
+            "/api/text-panels", json={"name": "Startup", "content": "START"}
+        ).json()
+        playlist = client.post(
+            "/api/playlists",
+            json={"name": "Startup", "is_default": True, "is_enabled": True},
+        ).json()
+        item = client.post(
+            f"/api/playlists/{playlist['id']}/items",
+            json={
+                "item_type": "text_panel",
+                "text_panel_id": panel["id"],
+                "duration_ms": 1000,
+            },
+        )
+        assert item.status_code == 201
+
+    autoplay = replace(settings, autoplay_default=True)
+    with TestClient(
+        create_app(autoplay, matrix_adapter=MockMatrixAdapter())
+    ) as client:
+        state = client.get("/api/playback/state").json()
+        assert state["status"] == "playing"
+        assert state["playlist_id"] == playlist["id"]

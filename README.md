@@ -37,6 +37,12 @@ is 64x96 and is rotated by the configured mapper:
 --led-pwm-lsb-nanoseconds=160 --led-slowdown-gpio=2
 ```
 
+Set `MATRIX_PLAYER_MATRIX_MODE=hardware` to use the attached matrix, or `mock`
+for UI and API development without GPIO output. Set
+`MATRIX_PLAYER_AUTOPLAY_DEFAULT=true` to start the enabled playlist marked as
+default whenever the service starts. Leave autoplay disabled while provisioning
+if the matrix should remain blank across service restarts.
+
 Common operations:
 
 ```sh

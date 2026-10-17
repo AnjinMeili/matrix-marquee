@@ -75,6 +75,23 @@ def create_app(
                     "matrix_initialization_failed", extra={"matrix_mode": configured.matrix_mode}
                 )
                 raise
+        if configured.autoplay_default:
+            default_playlist = app.state.database.fetch_one(
+                """SELECT id FROM playlists
+                   WHERE is_default = 1 AND is_enabled = 1
+                   ORDER BY id LIMIT 1"""
+            )
+            if default_playlist is not None:
+                playlist_id = int(default_playlist["id"])
+                try:
+                    app.state.playback.start(playlist_id)
+                    logging.getLogger(__name__).info(
+                        "default_playlist_started", extra={"playlist_id": playlist_id}
+                    )
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "default_playlist_start_failed", extra={"playlist_id": playlist_id}
+                    )
         try:
             logging.getLogger(__name__).info(
                 "application_started", extra={"matrix_mode": configured.matrix_mode}

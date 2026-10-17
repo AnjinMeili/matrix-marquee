@@ -19,6 +19,18 @@ def _matrix_mode() -> str:
     return mode
 
 
+def _boolean(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean")
+
+
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
@@ -29,6 +41,7 @@ class Settings:
     matrix_width: int
     matrix_height: int
     log_level: str
+    autoplay_default: bool = False
     matrix_mode: str = "mock"
     matrix_rows: int = 32
     matrix_cols: int = 64
@@ -57,6 +70,7 @@ class Settings:
             matrix_width=_positive_int("MATRIX_PLAYER_MATRIX_WIDTH", 96),
             matrix_height=_positive_int("MATRIX_PLAYER_MATRIX_HEIGHT", 64),
             log_level=os.getenv("MATRIX_PLAYER_LOG_LEVEL", "INFO").upper(),
+            autoplay_default=_boolean("MATRIX_PLAYER_AUTOPLAY_DEFAULT", False),
             matrix_mode=_matrix_mode(),
             matrix_rows=_positive_int("MATRIX_ROWS", 32),
             matrix_cols=_positive_int("MATRIX_COLS", 64),
