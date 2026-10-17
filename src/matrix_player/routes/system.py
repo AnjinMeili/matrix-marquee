@@ -65,6 +65,7 @@ def status_endpoint(
             "error": request.app.state.matrix_error,
         },
         "playback": playback.state().model_dump(mode="json"),
+        "health": request.app.state.health.summary(),
         "storage": {
             "total_bytes": usage.total,
             "used_bytes": usage.used,
@@ -174,3 +175,14 @@ async def download_backup(
         headers={"Cache-Control": "no-store"},
         background=BackgroundTask(backup.path.unlink, missing_ok=True),
     )
+
+
+@router.get("/health")
+def health_details(request: Request) -> dict:
+    """Heat and power: the current state, a 24-hour record, and recent events."""
+    monitor = request.app.state.health
+    return {
+        "summary": monitor.summary(),
+        "history": monitor.history(hours=24, bucket_minutes=5),
+        "events": monitor.events(hours=24),
+    }

@@ -687,3 +687,107 @@ def test_sending_a_disabled_playlist_is_refused_like_starting_it(tmp_path: Path)
         sent = client.post("/api/playback/send", json={"target_type": "playlist", "target_id": playlist["id"]})
         assert sent.status_code == 409
         assert client.post("/api/playback/send", json={"target_type": "playlist", "target_id": 999}).status_code == 404
+
+
+class FakeSensors:
+    def __init__(self) -> None:
+        from matrix_player.health import Reading
+
+        self.reading = Reading(45.0, 0, 1500)
+
+    def __call__(self):
+        return self.reading
+
+
+def make_monitor(tmp_path: Path, clock: List[float]):
+    from matrix_player.health import HealthMonitor
+
+    database = Database(tmp_path / "health.sqlite3")
+    database.initialize()
+    sensors = FakeSensors()
+    return HealthMonitor(database, sampler=sensors, clock=lambda: clock[0]), sensors, database
+
+
+def test_heat_levels_events_and_hysteresis(tmp_path: Path) -> None:
+    from matrix_player.health import Reading
+
+    clock = [1_800_000_000.0]
+    monitor, sensors, _ = make_monitor(tmp_path, clock)
+
+    def step(temp: float, flags: int = 0) -> dict:
+        sensors.reading = Reading(temp, flags, 1500)
+        clock[0] += 10
+        monitor.sample()
+        return monitor.summary()
+
+    assert step(45)["level"] == "ok"
+    warm = step(72)
+    assert warm["level"] == "warning" and "Getting warm (72" in warm["message"]
+    hot = step(81, 0x8)  # soft temperature limit active
+    assert hot["level"] == "critical" and "slowing itself down" in hot["message"]
+    assert "cooled" not in [event["kind"] for event in monitor.events()]  # heating up is not cooling
+    step(79, 0x8)
+    step(78)  # still within the 3 °C margin below "hot": no flapping
+    kinds = [event["kind"] for event in monitor.events()]
+    assert kinds.count("hot") == 1 and kinds.count("warm") == 1
+
+    cooled = step(50)
+    assert cooled["level"] == "warning"  # the overheating is still reported for the day
+    assert "earlier" in cooled["message"]
+    assert cooled["day_max_c"] == 81
+    assert {"cooled_from_hot", "throttle_cleared"} <= {event["kind"] for event in monitor.events()}
+
+
+def test_power_problems_now_and_since_boot(tmp_path: Path) -> None:
+    from matrix_player.health import Reading
+
+    clock = [1_800_000_000.0]
+    monitor, sensors, _ = make_monitor(tmp_path, clock)
+    sensors.reading = Reading(45.0, 0x1 | 0x10000, 1500)
+    monitor.sample()
+    now = monitor.summary()
+    assert now["level"] == "critical" and now["undervoltage_now"] and "Power is too low" in now["message"]
+
+    sensors.reading = Reading(45.0, 0x10000, 1500)  # cleared, but it happened since boot
+    clock[0] += 10
+    monitor.sample()
+    later = monitor.summary()
+    assert later["level"] == "warning" and later["undervoltage_since_boot"] and not later["undervoltage_now"]
+    assert [event["kind"] for event in monitor.events()][:2] == ["power_ok", "power_low"]
+
+
+def test_heat_record_survives_restart_and_charts(tmp_path: Path) -> None:
+    from matrix_player.health import HealthMonitor, Reading
+
+    clock = [1_800_000_000.0]
+    monitor, sensors, database = make_monitor(tmp_path, clock)
+    for minute, temp in enumerate((50, 64, 58)):
+        sensors.reading = Reading(float(temp), 0, 1500)
+        clock[0] = 1_800_000_000.0 + minute * 60
+        monitor.sample()
+    monitor.close()
+
+    restarted = HealthMonitor(database, sampler=sensors, clock=lambda: clock[0])
+    sensors.reading = Reading(55.0, 0, 1500)
+    clock[0] += 60
+    restarted.sample()
+    assert restarted.summary()["day_max_c"] == 64
+    history = restarted.history(hours=1, bucket_minutes=1)
+    assert [point["temp_max"] for point in history] == [50, 64, 58, 55]
+
+
+def test_no_sensors_is_reported_honestly(tmp_path: Path) -> None:
+    from matrix_player.health import Reading
+
+    clock = [1_800_000_000.0]
+    monitor, sensors, _ = make_monitor(tmp_path, clock)
+    sensors.reading = Reading(None, None, None)
+    monitor.sample()
+    assert monitor.summary()["level"] == "unknown"
+
+
+def test_health_api(tmp_path: Path) -> None:
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=MockMatrixAdapter())) as client:
+        assert "level" in client.get("/api/status").json()["health"]
+        details = client.get("/api/health").json()
+        assert set(details) == {"summary", "history", "events"}

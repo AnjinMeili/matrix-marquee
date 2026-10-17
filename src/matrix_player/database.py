@@ -77,6 +77,19 @@ CREATE TABLE IF NOT EXISTS media_tags (
     PRIMARY KEY (media_id, tag_id)
 );
 CREATE INDEX IF NOT EXISTS idx_media_tags_tag ON media_tags(tag_id);
+CREATE TABLE IF NOT EXISTS health_samples (
+    minute INTEGER PRIMARY KEY,
+    temp_max REAL,
+    flags INTEGER NOT NULL DEFAULT 0,
+    freq_min INTEGER
+);
+CREATE TABLE IF NOT EXISTS health_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at REAL NOT NULL,
+    kind TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_health_events_at ON health_events(at);
 """
 
 # Additive column migrations, applied in order to databases created by older

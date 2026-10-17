@@ -40,6 +40,11 @@
           <div><p class="eyebrow">Live sign</p><h1 id="dashboard-title">What's on the sign</h1><p class="subtitle" id="dashboard-summary">Loading player state…</p></div>
           <button class="button primary" data-action="new-text-panel">＋ New message</button>
         </header>
+        <div id="health-banner" class="health-banner" role="status" hidden>
+          <span class="health-icon" aria-hidden="true">⚠</span>
+          <p id="health-banner-text"></p>
+          <a href="#settings" data-view="settings" class="text-link">Details</a>
+        </div>
         <div class="dashboard-grid">
           <article class="card output-card">
             <div class="card-heading"><div><p class="eyebrow">Showing now</p><h2 id="now-title">Nothing playing</h2></div><span class="pill" id="playback-pill">Stopped</span></div>
@@ -79,6 +84,7 @@
             <dl class="metrics">
               <div><dt>Sign</dt><dd id="health-matrix">—</dd></div>
               <div><dt>Temperature</dt><dd id="health-temp">—</dd></div>
+              <div><dt>Power</dt><dd id="health-power">—</dd></div>
               <div><dt>Storage</dt><dd id="health-storage">—</dd></div>
               <div><dt>Wi-Fi</dt><dd id="health-network">—</dd></div>
               <div><dt>Internet</dt><dd id="health-upstream">—</dd></div>
@@ -139,6 +145,19 @@
         <div class="settings-grid">
           <article class="card"><div class="card-heading"><div><p class="eyebrow">Connection</p><h2>Network</h2></div><span class="status-dot" id="settings-network-dot"></span></div><dl class="metrics" id="network-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl></article>
           <article class="card"><p class="eyebrow">Hardware</p><h2>Matrix profile</h2><dl class="metrics" id="matrix-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl><p class="form-help">Hardware configuration is managed on the appliance.</p></article>
+          <article class="card wide" id="heat-card">
+            <div class="card-heading"><div><p class="eyebrow">Inside the enclosure</p><h2>Heat &amp; power</h2></div><span class="pill" id="heat-pill">—</span></div>
+            <p id="heat-message" class="heat-message">Checking…</p>
+            <dl class="metrics" id="heat-metrics"></dl>
+            <figure class="heat-chart-wrap">
+              <figcaption>Pi temperature, last 24 hours: the highest reading in each 5 minutes</figcaption>
+              <div id="heat-chart" class="heat-chart"></div>
+              <p class="form-help" id="heat-chart-note"></p>
+            </figure>
+            <details class="heat-table"><summary>Show readings as a table</summary><div id="heat-table"></div></details>
+            <h3 class="heat-events-title">Recent events</h3>
+            <ul id="heat-events" class="event-list"></ul>
+          </article>
           <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Safekeeping</p><h2>Back up everything</h2></div></div><p>Saves every message, playlist, tag, picture, and video on the sign into one <b>.zip</b> file on this device.</p><p class="form-help" id="backup-estimate">Working out the size…</p><div class="button-row"><a class="button primary" id="backup-link" href="/api/backup" download>⇩ Download backup</a></div><p class="form-help">On iPhone, open this page in Safari (not the Wi-Fi sign-in pop-up) so the file can be saved to Files. Passwords are never included.</p></article>
           <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Support</p><h2>Diagnostics</h2></div></div><div id="diagnostic-summary" class="diagnostic-box">Checking services…</div><div class="button-row"><button class="button" data-action="copy-diagnostics">Copy summary</button><a class="button" href="/api/diagnostics/logs" download>Download log bundle</a></div><p class="form-help">Log bundles leave out passwords, message text, and file names.</p></article>
         </div>

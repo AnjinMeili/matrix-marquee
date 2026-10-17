@@ -168,7 +168,7 @@
 
     const matrix = status.matrix;
     $("#health-matrix").textContent = `${matrix.width} × ${matrix.height} ${matrix.connected ? "connected" : "unavailable"}`;
-    $("#health-temp").textContent = status.temperature_c == null ? "—" : `${status.temperature_c.toFixed(1)} °C`;
+    renderHealthSummary(status.health);
     $("#health-storage").textContent = `${formatBytes(status.storage.free_bytes)} free`;
     const net = state.network;
     if (net) {
@@ -1020,6 +1020,173 @@
     ].join("\n");
   }
 
+  // ---------- Heat & power ----------
+
+  const HEALTH_LEVEL = { ok: "Normal", warning: "Check", critical: "Problem", unknown: "No sensors" };
+  const clock = (seconds) => new Date(seconds * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const degrees = (value) => (value == null ? "—" : `${value.toFixed(1)} °C`);
+
+  function powerText(health) {
+    if (!health || health.level === "unknown") return "—";
+    if (health.undervoltage_now) return "Too low right now";
+    if (health.undervoltage_since_boot) return "Dipped earlier";
+    return "Normal";
+  }
+
+  function renderHealthSummary(health) {
+    if (!health) return;
+    const banner = $("#health-banner");
+    const alert = health.level === "warning" || health.level === "critical";
+    banner.hidden = !alert;
+    banner.classList.toggle("critical", health.level === "critical");
+    $("#health-banner-text").textContent = health.message;
+    const temp = $("#health-temp");
+    temp.textContent = health.temperature_c == null
+      ? "—"
+      : `${degrees(health.temperature_c)}${health.day_max_c != null ? ` · today's max ${health.day_max_c.toFixed(0)} °C` : ""}`;
+    temp.className = health.temperature_c >= health.hot_c ? "bad" : health.temperature_c >= health.warm_c ? "warn" : "";
+    const power = $("#health-power");
+    power.textContent = powerText(health);
+    power.className = health.undervoltage_now ? "bad" : health.undervoltage_since_boot ? "warn" : "";
+  }
+
+  function renderHealth(details) {
+    state.health = details;
+    const { summary, history, events } = details;
+    renderHealthSummary(summary);
+    const pill = $("#heat-pill");
+    pill.textContent = HEALTH_LEVEL[summary.level] || summary.level;
+    pill.className = `pill ${summary.level === "ok" ? "playing" : summary.level === "unknown" ? "" : summary.level}`;
+    $("#heat-message").textContent = summary.message;
+    $("#heat-metrics").replaceChildren(...[
+      ["Temperature now", degrees(summary.temperature_c)],
+      ["Highest today", degrees(summary.day_max_c)],
+      ["Power", powerText(summary)],
+      ["Pi speed", summary.freq_mhz ? `${summary.freq_mhz} MHz${summary.throttled_now ? " (slowed down)" : ""}` : "—"]
+    ].map(([term, value]) => el("div", {}, el("dt", { text: term }), el("dd", { text: value }))));
+    renderHeatChart(history, summary);
+    renderHeatTable(history);
+    $("#heat-events").replaceChildren(...(events.length
+      ? events.map((event) => el("li", { class: event.problem ? "problem" : "" },
+        el("time", { text: clock(event.at) }), el("span", { text: event.detail })))
+      : [el("li", { class: "muted", text: "Nothing to report in the last 24 hours." })]));
+  }
+
+  const SVG = "http://www.w3.org/2000/svg";
+  function svg(tag, attributes = {}, text = null) {
+    const node = document.createElementNS(SVG, tag);
+    for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  // One series (Pi temperature) with the warm and slow-down levels as reference lines.
+  function renderHeatChart(history, summary) {
+    const box = $("#heat-chart");
+    const points = history.filter((point) => point.temp_max != null);
+    const note = $("#heat-chart-note");
+    if (!points.length) {
+      box.replaceChildren(el("p", { class: "empty", text: "No readings yet. The chart fills in as the sign runs." }));
+      note.textContent = "";
+      return;
+    }
+    // Drawn at the container's real width so text stays readable on a phone.
+    const width = Math.max(280, Math.round(box.clientWidth || 640));
+    const height = width < 480 ? 170 : 210;
+    const pad = { left: 32, right: 8, top: 12, bottom: 22 };
+    const hourLabel = (at) => new Date(at * 1000).toLocaleTimeString([], { hour: "numeric" });
+    const end = Date.now() / 1000;
+    const start = end - 24 * 3600;
+    const temps = points.map((point) => point.temp_max);
+    const low = Math.min(30, Math.floor((Math.min(...temps) - 5) / 10) * 10);
+    const high = Math.max(90, Math.ceil((Math.max(...temps) + 5) / 10) * 10);
+    const x = (at) => pad.left + ((at - start) / (end - start)) * (width - pad.left - pad.right);
+    const y = (temp) => pad.top + (1 - (temp - low) / (high - low)) * (height - pad.top - pad.bottom);
+    const chart = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Pi temperature over the last 24 hours", class: "heat-svg" });
+
+    for (let temp = low; temp <= high; temp += 10) {
+      chart.append(svg("line", { x1: pad.left, x2: width - pad.right, y1: y(temp), y2: y(temp), class: "grid" }));
+      chart.append(svg("text", { x: pad.left - 6, y: y(temp) + 4, class: "tick", "text-anchor": "end" }, `${temp}°`));
+    }
+    for (let hours = 24; hours >= 0; hours -= 6) {
+      const at = end - hours * 3600;
+      chart.append(svg("text", { x: x(at), y: height - 6, class: "tick", "text-anchor": hours === 24 ? "start" : hours === 0 ? "end" : "middle" }, hours === 0 ? "now" : hourLabel(at)));
+    }
+    [[summary.warm_c, "warm", "warning"], [summary.hot_c, "slows down", "danger"]].forEach(([temp, label, tone]) => {
+      chart.append(svg("line", { x1: pad.left, x2: width - pad.right, y1: y(temp), y2: y(temp), class: `threshold ${tone}` }));
+      // Labelled at the oldest end, keeping the newest readings on the right clear.
+      chart.append(svg("text", { x: pad.left + 4, y: y(temp) - 4, class: "tick threshold-label" }, `${temp.toFixed(0)}° ${label}`));
+    });
+
+    // Break the line wherever readings are missing (the sign was off).
+    const segments = [];
+    points.forEach((point, index) => {
+      if (!index || point.at - points[index - 1].at > 15 * 60) segments.push([]);
+      segments[segments.length - 1].push(point);
+    });
+    const base = y(low);
+    for (const segment of segments) {
+      const line = segment.map((point, index) => `${index ? "L" : "M"}${x(point.at).toFixed(1)},${y(point.temp_max).toFixed(1)}`).join("");
+      if (segment.length > 1) {
+        chart.append(svg("path", { d: `${line}L${x(segment[segment.length - 1].at).toFixed(1)},${base}L${x(segment[0].at).toFixed(1)},${base}Z`, class: "area" }));
+      }
+      chart.append(svg("path", { d: line, class: "line" }));
+    }
+    const flagged = points.filter((point) => point.undervoltage || point.throttled);
+    flagged.forEach((point) => chart.append(svg("circle", { cx: x(point.at), cy: y(point.temp_max), r: 4, class: "event-dot" })));
+    const last = points[points.length - 1];
+    chart.append(svg("circle", { cx: x(last.at), cy: y(last.temp_max), r: 4, class: "end-dot" }));
+
+    const crosshair = svg("line", { y1: pad.top, y2: height - pad.bottom, class: "crosshair", visibility: "hidden" });
+    const marker = svg("circle", { r: 4, class: "end-dot", visibility: "hidden" });
+    const overlay = svg("rect", { x: pad.left, y: pad.top, width: width - pad.left - pad.right, height: height - pad.top - pad.bottom, class: "hit" });
+    chart.append(crosshair, marker, overlay);
+    const tip = el("div", { class: "chart-tip", hidden: true });
+    overlay.addEventListener("pointermove", (event) => {
+      const rect = chart.getBoundingClientRect();
+      const at = start + ((event.clientX - rect.left) / rect.width * width - pad.left) / (width - pad.left - pad.right) * (end - start);
+      const point = points.reduce((best, candidate) => Math.abs(candidate.at - at) < Math.abs(best.at - at) ? candidate : best);
+      const px = x(point.at);
+      crosshair.setAttribute("x1", px); crosshair.setAttribute("x2", px); crosshair.setAttribute("visibility", "visible");
+      marker.setAttribute("cx", px); marker.setAttribute("cy", y(point.temp_max)); marker.setAttribute("visibility", "visible");
+      const problems = [point.undervoltage && "power dipped", point.throttled && "Pi slowed down"].filter(Boolean);
+      tip.textContent = `${clock(point.at)} · ${point.temp_max.toFixed(1)} °C${problems.length ? ` · ${problems.join(", ")}` : ""}`;
+      tip.hidden = false;
+      const left = (px / width) * rect.width;
+      tip.style.left = `${Math.min(Math.max(left, 70), rect.width - 70)}px`;
+    });
+    overlay.addEventListener("pointerleave", () => {
+      crosshair.setAttribute("visibility", "hidden");
+      marker.setAttribute("visibility", "hidden");
+      tip.hidden = true;
+    });
+    box.replaceChildren(chart, tip);
+    note.textContent = flagged.length
+      ? "Red dots mark times the power dipped or the Pi slowed itself down."
+      : `Latest ${last.temp_max.toFixed(1)} °C at ${clock(last.at)}.`;
+  }
+
+  function renderHeatTable(history) {
+    const hours = new Map();
+    for (const point of history) {
+      if (point.temp_max == null) continue;
+      const hour = Math.floor(point.at / 3600) * 3600;
+      const entry = hours.get(hour) || { at: hour, max: -Infinity, problems: new Set() };
+      entry.max = Math.max(entry.max, point.temp_max);
+      if (point.undervoltage) entry.problems.add("power dipped");
+      if (point.throttled) entry.problems.add("slowed down");
+      hours.set(hour, entry);
+    }
+    const rows = [...hours.values()].sort((a, b) => b.at - a.at);
+    $("#heat-table").replaceChildren(rows.length
+      ? el("table", { class: "data-table" },
+        el("thead", {}, el("tr", {}, el("th", { text: "Hour" }), el("th", { text: "Highest" }), el("th", { text: "Problems" }))),
+        el("tbody", {}, ...rows.map((row) => el("tr", {},
+          el("td", { text: clock(row.at) }), el("td", { text: `${row.max.toFixed(1)} °C` }),
+          el("td", { text: row.problems.size ? [...row.problems].join(", ") : "—" })))))
+      : el("p", { class: "muted", text: "No readings yet." }));
+  }
+
   // ---------- Loading ----------
 
   async function loadFonts() {
@@ -1032,16 +1199,17 @@
     // Fonts load on their own so one failing list can never leave the editor fontless.
     await loadFonts();
     try {
-      const [status, network, playlists, media, panels, diagnostics, tags] = await Promise.all([
+      const [status, network, playlists, media, panels, diagnostics, tags, health] = await Promise.all([
         request("/api/status"), request("/api/network"), request("/api/playlists"),
         request("/api/media"), request("/api/text-panels"), request("/api/diagnostics"),
-        request("/api/media/tags")
+        request("/api/media/tags"), request("/api/health")
       ]);
       Object.assign(state, { playlists, media, panels, tags });
       if (state.tagFilter && !tags.some((tag) => tag.name === state.tagFilter)) state.tagFilter = null;
       renderPlaylists(); renderMedia(); renderPanels();
       renderStatus(status, network);
       renderSettings(status, network, diagnostics);
+      renderHealth(health);
     } catch (error) {
       $("#connection-label").textContent = "Can't reach the sign";
       $("#connection-detail").textContent = "Check you're on the sign's Wi-Fi";
@@ -1065,6 +1233,7 @@
     document.querySelectorAll(".view").forEach((view) => { view.hidden = view.id !== name; });
     document.querySelectorAll("[data-view]").forEach((link) => link.classList.toggle("active", link.dataset.view === name));
     if (name === "dashboard") liveLoop();
+    if (name === "settings" && state.health) renderHeatChart(state.health.history, state.health.summary);
     if (state.returnTo && state.returnTo.view === name) {
       const { anchor } = state.returnTo;
       state.returnTo = null;
@@ -1212,6 +1381,11 @@
   });
 
   window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (state.health) renderHeatChart(state.health.history, state.health.summary); }, 200);
+  });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshStatus(); });
   setInterval(() => { if (document.visibilityState === "visible") refreshStatus(); }, 3000);
 

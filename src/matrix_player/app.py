@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from .backup import remove_stale_archives
 from .config import Settings
 from .database import Database
+from .health import HealthMonitor
 from .maintenance import start_library_checks
 from .matrix import MatrixAdapter, MatrixConfig, MockMatrixAdapter, RGBMatrixAdapter
 from .playback import (
@@ -97,6 +98,7 @@ def create_app(
         app.state.database.initialize()
         remove_stale_archives(configured)
         start_library_checks(app.state.database, app.state.storage, configured)
+        app.state.health.start()
         app.state.proxies.start()
         app.state.proxies.submit_missing(
             row["filename"]
@@ -149,6 +151,7 @@ def create_app(
             )
             yield
         finally:
+            app.state.health.close()
             app.state.proxies.close()
             try:
                 app.state.playback.close()
@@ -169,6 +172,7 @@ def create_app(
     app.state.database = Database(configured.database_path)
     app.state.storage = MediaStorage(configured)
     app.state.proxies = VideoProxyWorker(app.state.storage)
+    app.state.health = HealthMonitor(app.state.database)
     app.state.playback = playback_controller
     app.state.matrix = matrix_adapter
     app.state.matrix_connected = matrix_adapter is not None

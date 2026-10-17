@@ -224,6 +224,41 @@ dialog form { display: grid; gap: 15px; padding: 19px; }
 .media-dialog-thumb .thumb { width: 160px; margin: 0 auto; }
 .media-player { display: block; width: 100%; max-width: 420px; max-height: 50vh; margin: 0 auto; background: #000; border-radius: 8px; object-fit: contain; }
 .item-info { margin: 0; color: var(--text); font-weight: 650; }
+.health-banner { display: flex; align-items: center; gap: 10px; margin: -8px 0 18px; padding: 12px 14px; color: #211b03; background: var(--warning); border-radius: 12px; font-weight: 700; }
+.health-banner.critical { color: #2c0712; background: #ff9ab8; }
+.health-banner p { flex: 1; margin: 0; }
+.health-banner .text-link { color: inherit; text-decoration: underline; }
+.health-icon { font-size: 20px; }
+.pill.warning { color: var(--warning); border-color: rgba(255,209,102,.4); }
+.pill.critical { color: var(--danger); border-color: rgba(255,114,155,.4); }
+.heat-message { margin: 0 0 6px; font-weight: 650; }
+.heat-chart-wrap { margin: 16px 0 0; }
+.heat-chart-wrap figcaption { margin-bottom: 6px; color: var(--muted); font-size: 13px; }
+.heat-chart { position: relative; }
+.heat-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.heat-svg .grid { stroke: var(--line); stroke-width: 1; }
+.heat-svg .tick { fill: var(--muted); font-size: 11px; }
+.heat-svg .threshold { stroke-width: 1; }
+.heat-svg .threshold.warning { stroke: var(--warning); }
+.heat-svg .threshold.danger { stroke: var(--danger); }
+.heat-svg .area { fill: var(--accent); opacity: .1; }
+.heat-svg .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.heat-svg .end-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.heat-svg .event-dot { fill: var(--danger); stroke: var(--surface); stroke-width: 2; }
+.heat-svg .crosshair { stroke: var(--line-bright); stroke-width: 1; }
+.heat-svg .hit { fill: transparent; cursor: crosshair; touch-action: pan-y; }
+.heat-svg .threshold-label { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.chart-tip { position: absolute; top: -6px; transform: translate(-50%, -100%); padding: 5px 9px; color: var(--text); background: var(--surface-raised); border: 1px solid var(--line-bright); border-radius: 7px; font-size: 12px; font-weight: 650; white-space: nowrap; pointer-events: none; }
+.heat-table { margin-top: 12px; }
+.heat-table summary { color: var(--accent); font-weight: 700; cursor: pointer; }
+.data-table { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 13px; }
+.data-table th, .data-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.data-table th { color: var(--muted); font-weight: 650; }
+.heat-events-title { margin: 18px 0 8px; }
+.event-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.event-list li { display: flex; gap: 10px; }
+.event-list time { min-width: 52px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.event-list li.problem span::before { content: "⚠ "; color: var(--warning); }
 .returned { animation: returned 2.2s ease-out; }
 @keyframes returned { 0%, 45% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 3px transparent; } }
 .run-through { display: grid; gap: 6px; margin-top: 16px; padding: 12px; background: #05080d; border-radius: 10px; }
