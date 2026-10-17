@@ -9,7 +9,8 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from typing import Optional, Tuple
+import threading
+from typing import Dict, Optional, Tuple
 
 from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -80,6 +81,12 @@ class StoredMedia:
 class MediaStorage:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self._proxy_locks: Dict[str, threading.Lock] = {}
+        self._proxy_locks_guard = threading.Lock()
+
+    def _proxy_lock(self, filename: str) -> threading.Lock:
+        with self._proxy_locks_guard:
+            return self._proxy_locks.setdefault(filename, threading.Lock())
 
     @staticmethod
     def safe_display_name(filename: Optional[str]) -> str:
@@ -217,7 +224,12 @@ class MediaStorage:
         return proxy if proxy.is_file() else self.media_path(filename)
 
     def build_proxy(self, filename: str) -> bool:
-        """Transcodes a video into its playback copy; True when one is available."""
+        """Transcodes a video, or an animated GIF for the phone's player, into its small
+        playback copy; True when one is available. One build per file at a time."""
+        with self._proxy_lock(filename):
+            return self._build_proxy(filename)
+
+    def _build_proxy(self, filename: str) -> bool:
         target = self.proxy_path(filename)
         source = self.media_path(filename)
         if target.is_file():

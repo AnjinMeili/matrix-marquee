@@ -637,3 +637,24 @@ def test_existing_gifs_are_rechecked_once_at_startup(tmp_path: Path) -> None:
     with TestClient(create_app(settings, matrix_adapter=MockMatrixAdapter())):
         time.sleep(0.3)
     assert types()["still.gif"][0] == "gif"  # the check does not repeat once done
+
+
+def test_edit_pane_player_for_animations(tmp_path: Path) -> None:
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=MockMatrixAdapter())) as client:
+        still = client.post("/api/media", files={"file": ("still.png", png_bytes(), "image/png")}).json()
+        moving = client.post("/api/media", files={"file": ("moving.gif", gif_bytes([100, 100, 100]), "image/gif")}).json()
+        assert client.get(f"/api/media/{still['id']}/playback").status_code == 404
+
+        played = client.get(f"/api/media/{moving['id']}/playback")
+        assert played.status_code == 200
+        expected = "video/mp4" if shutil.which("ffmpeg") else "image/gif"
+        assert played.headers["content-type"] == expected
+        # iPhone Safari only plays video from servers that honour byte ranges.
+        partial = client.get(f"/api/media/{moving['id']}/playback", headers={"Range": "bytes=0-9"})
+        assert partial.status_code == 206 and len(partial.content) == 10
+
+        if shutil.which("ffmpeg"):
+            proxy = tmp_path / "media" / (Path(moving["filename"]).stem + ".play.mp4")
+            assert proxy.is_file()
+            client.delete(f"/api/media/{moving['id']}")
+            assert not proxy.exists()

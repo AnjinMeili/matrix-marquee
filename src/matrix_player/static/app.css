@@ -222,6 +222,7 @@ dialog form { display: grid; gap: 15px; padding: 19px; }
 .tag-chip.small { min-height: 26px; padding: 2px 8px; font-size: 11px; }
 .card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: -4px 0 10px; }
 .media-dialog-thumb .thumb { width: 160px; margin: 0 auto; }
+.media-player { display: block; width: 100%; max-width: 420px; max-height: 50vh; margin: 0 auto; background: #000; border-radius: 8px; object-fit: contain; }
 .item-info { margin: 0; color: var(--text); font-weight: 650; }
 .returned { animation: returned 2.2s ease-out; }
 @keyframes returned { 0%, 45% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 3px transparent; } }

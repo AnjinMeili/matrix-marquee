@@ -882,6 +882,32 @@
     renderDraftTags();
   }
 
+  // Videos and animated GIFs get a real player with the phone's own controls.
+  function mediaPlayer(item) {
+    const gif = item.media_type === "gif";
+    const video = el("video", {
+      class: "media-player", controls: true, playsinline: true, muted: true, preload: "metadata",
+      loop: gif, autoplay: gif, poster: `/api/media/${item.id}/thumbnail`,
+      "aria-label": `Play ${item.display_name}`
+    });
+    video.muted = true;  // the sign has no sound; the attribute alone is not enough for autoplay
+    video.onerror = () => {
+      video.replaceWith(gif
+        ? el("img", { class: "media-player", src: `/api/media/${item.id}/content`, alt: "" })
+        : thumb("media", item.id));
+    };
+    video.src = `/api/media/${item.id}/playback`;
+    return video;
+  }
+
+  function stopMediaPlayer() {
+    const video = $("#media-dialog video");
+    if (!video) return;
+    video.pause();
+    video.removeAttribute("src");
+    video.load();  // stops the download as well as playback
+  }
+
   function openMediaDialog(item) {
     state.editingMedia = item.id;
     state.draftTags = [...item.tags];
@@ -889,7 +915,11 @@
     form.reset();
     form.elements.display_name.value = item.display_name;
     const preview = $("#media-dialog-thumb");
-    preview.replaceChildren(thumb("media", item.id));
+    preview.replaceChildren(item.media_type === "image" ? thumb("media", item.id) : mediaPlayer(item));
+    $("#media-show-now").onclick = () => {
+      $("#media-dialog").close();
+      showNow("media", item.id, item.display_name, "crop", `media-${item.id}`);
+    };
     const size = item.width && item.height ? ` · ${item.width} × ${item.height}` : "";
     $("#media-dialog-info").textContent = `${describeMedia(item)}${size} · ${formatBytes(item.file_size_bytes)}`;
     renderDraftTags();
@@ -1185,6 +1215,7 @@
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshStatus(); });
   setInterval(() => { if (document.visibilityState === "visible") refreshStatus(); }, 3000);
 
+  $("#media-dialog").addEventListener("close", stopMediaPlayer);
   presetButtons($("#quick-presets"), () => {}, "protest");
   showView(location.hash.slice(1) || "dashboard");
   load();

@@ -189,6 +189,28 @@ def get_media_content(
     return FileResponse(path, media_type=media.mime_type, filename=media.display_name)
 
 
+@router.get("/{media_id}/playback", response_class=FileResponse)
+async def get_media_playback(
+    media_id: int,
+    database: Database = Depends(get_database),
+    storage: MediaStorage = Depends(get_storage),
+) -> FileResponse:
+    """A phone-friendly clip for the edit pane's player: the small H.264 playback copy
+    of a video or animated GIF (built on first request for GIFs), else the original."""
+    media = _get_media(media_id, database)
+    if media.media_type == MediaType.IMAGE:
+        raise HTTPException(status_code=404, detail="still pictures have nothing to play")
+    original = storage.media_path(media.filename)
+    if not original.is_file():
+        raise HTTPException(status_code=410, detail="media file is missing")
+    proxy = storage.proxy_path(media.filename)
+    if not proxy.is_file() and media.media_type == MediaType.GIF:
+        await run_in_threadpool(storage.build_proxy, media.filename)
+    if proxy.is_file():
+        return FileResponse(proxy, media_type="video/mp4", headers={"Cache-Control": "no-cache"})
+    return FileResponse(original, media_type=media.mime_type, headers={"Cache-Control": "no-cache"})
+
+
 @router.get("/{media_id}/thumbnail", response_class=FileResponse)
 async def get_thumbnail(
     media_id: int,
