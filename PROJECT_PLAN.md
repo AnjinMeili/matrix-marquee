@@ -16,7 +16,7 @@ The primary operator is expected to use a phone on the local Wi-Fi network. The 
 
 ### Confirmed deployment constraints
 
-- Development/deployment target: Raspberry Pi at `192.168.1.194` over SSH.
+- Development/deployment target: Raspberry Pi at `protest.local` over SSH.
 - Operating system: DietPi OS.
 - Runtime privilege: the appliance currently assumes a root-only runtime; service permissions should be narrowed where practical without breaking matrix access or panel administration.
 - The panel requires extended access, so the final design must document which privileged operations are needed and isolate them behind a small, auditable service boundary.

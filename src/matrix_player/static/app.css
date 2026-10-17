@@ -259,6 +259,11 @@ dialog form { display: grid; gap: 15px; padding: 19px; }
 .event-list li { display: flex; gap: 10px; }
 .event-list time { min-width: 52px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .event-list li.problem span::before { content: "⚠ "; color: var(--warning); }
+.slider { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; margin-top: 14px; color: var(--text); font-size: 14px; }
+.slider output { color: var(--text); font-weight: 750; font-variant-numeric: tabular-nums; }
+.slider input[type="range"] { grid-column: 1 / -1; min-height: 32px; padding: 0; accent-color: var(--accent); background: transparent; border: 0; }
+.quick-brightness { margin-top: 12px; }
+#display-card .button-row { margin-top: 14px; }
 .returned { animation: returned 2.2s ease-out; }
 @keyframes returned { 0%, 45% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 3px transparent; } }
 .run-through { display: grid; gap: 6px; margin-top: 16px; padding: 12px; background: #05080d; border-radius: 10px; }

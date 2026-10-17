@@ -791,3 +791,60 @@ def test_health_api(tmp_path: Path) -> None:
         assert "level" in client.get("/api/status").json()["health"]
         details = client.get("/api/health").json()
         assert set(details) == {"summary", "history", "events"}
+
+
+def test_gamma_table_maths() -> None:
+    from matrix_player.display import gamma_table
+
+    table = gamma_table(2.2)
+    assert len(table) == 768
+    assert (table[0], table[128], table[255]) == (0, 56, 255)
+    assert gamma_table(1.0, 0.5)[255] == 128
+
+
+def test_brightness_and_gamma_apply_live_and_persist(tmp_path: Path) -> None:
+    from matrix_player.display import Correction
+
+    settings = make_settings(tmp_path)
+    matrix = MockMatrixAdapter()
+    with TestClient(create_app(settings, matrix_adapter=matrix)) as client:
+        assert client.get("/api/display").json() == {"brightness": 100, "gamma": 1.0}
+        grey = Image.new("RGB", (96, 64), (128, 128, 128))
+        matrix.show(grey)
+        assert matrix.history[-1].getpixel((0, 0)) == (128, 128, 128)
+
+        changed = client.put("/api/display", json={"brightness": 50, "gamma": 2.2})
+        assert changed.status_code == 200 and changed.json() == {"brightness": 50, "gamma": 2.2}
+        # The held picture is redrawn at once with the new settings...
+        assert matrix.history[-1].getpixel((0, 0)) == (28, 28, 28)
+        # ...while the live mirror keeps showing the design itself.
+        assert matrix.frame.getpixel((0, 0)) == (128, 128, 128)
+
+        assert client.put("/api/display", json={"brightness": 2, "gamma": 1.0}).status_code == 422
+        assert client.put("/api/display", json={"brightness": 80, "gamma": 3.5}).status_code == 422
+
+    restarted = MockMatrixAdapter()
+    with TestClient(create_app(settings, matrix_adapter=restarted)) as client:
+        assert client.get("/api/display").json() == {"brightness": 50, "gamma": 2.2}
+        assert restarted.correction == Correction(50, 2.2)
+
+
+def test_test_card_shows_and_returns_to_the_playlist(tmp_path: Path) -> None:
+    matrix = MockMatrixAdapter()
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=matrix)) as client:
+        playlist = client.post("/api/playlists", json={"name": "Loop"}).json()
+        panel = add_panel(client, "LOOP")
+        add_item(client, playlist["id"], item_type="text_panel", text_panel_id=panel["id"], duration_ms=500)
+        client.post("/api/playback/start", json={"playlist_id": playlist["id"]})
+
+        shown = client.post("/api/display/test-card")
+        assert shown.status_code == 200
+        assert shown.json()["source_label"] == "Test card"
+        assert shown.json()["resume_playlist_id"] == playlist["id"]
+        # The card has a white block on the left and black at the far right of the ramp start.
+        assert wait_for(lambda: matrix.frame.getpixel((2, 60)) == (255, 255, 255))
+        assert matrix.frame.getpixel((0, 0)) == (0, 0, 0)
+
+        released = client.post("/api/playback/release").json()
+        assert released["playlist_id"] == playlist["id"]
+        client.post("/api/playback/stop")

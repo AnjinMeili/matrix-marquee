@@ -192,6 +192,11 @@ class Playlist(PlaylistBase):
     items: List[PlaylistItem] = Field(default_factory=list)
 
 
+class DisplaySettings(ApiModel):
+    brightness: int = Field(default=100, ge=5, le=100, description="percent")
+    gamma: float = Field(default=1.0, ge=1.0, le=3.0)
+
+
 class PlaybackCommand(ApiModel):
     playlist_id: Optional[int] = None
     from_start: bool = False

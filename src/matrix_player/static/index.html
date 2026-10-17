@@ -66,6 +66,7 @@
               <button class="button" data-action="start-over" id="restart-button" hidden>⟲ Start over</button>
               <button class="button danger" data-playback="stop" id="stop-button">■ Turn off sign</button>
             </div>
+            <label class="slider quick-brightness">Brightness <output data-out="brightness">100%</output><input type="range" name="brightness" min="5" max="100" step="1" value="100" data-display></label>
           </article>
           <article class="card quick-card">
             <div class="card-heading"><div><p class="eyebrow">Fast</p><h2>Quick message</h2></div></div>
@@ -143,6 +144,18 @@
           <button class="button" data-action="refresh-diagnostics">Refresh</button>
         </header>
         <div class="settings-grid">
+          <article class="card wide" id="display-card">
+            <div class="card-heading"><div><p class="eyebrow">Panel</p><h2>Brightness &amp; gamma</h2></div></div>
+            <p class="form-help">Outdoor high-brightness panels can wash out and smear moving pictures. Show the test card, then lower Brightness or raise Gamma until the dark steps in its second row stay separate and bright edges stop trailing.</p>
+            <label class="slider">Brightness <output data-out="brightness">100%</output><input type="range" name="brightness" min="5" max="100" step="1" value="100" data-display></label>
+            <label class="slider">Gamma <output data-out="gamma">1.0</output><input type="range" name="gamma" min="1" max="3" step="0.1" value="1" data-display></label>
+            <div class="button-row">
+              <button class="button" data-action="test-card">Show test card</button>
+              <button class="button" data-playback="release">Back to playlist</button>
+              <button class="button" data-action="reset-display">Reset to normal</button>
+            </div>
+            <p class="form-help" id="display-status">Changes reach the sign straight away and are kept after a restart. The live preview shows the design itself, before these adjustments.</p>
+          </article>
           <article class="card"><div class="card-heading"><div><p class="eyebrow">Connection</p><h2>Network</h2></div><span class="status-dot" id="settings-network-dot"></span></div><dl class="metrics" id="network-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl></article>
           <article class="card"><p class="eyebrow">Hardware</p><h2>Matrix profile</h2><dl class="metrics" id="matrix-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl><p class="form-help">Hardware configuration is managed on the appliance.</p></article>
           <article class="card wide" id="heat-card">

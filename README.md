@@ -25,9 +25,8 @@ Wi-Fi; no internet connection is needed.
 
 ## Using it from a phone
 
-Join the sign's Wi-Fi; the sign-in window opens the control page. It also
-answers at the AP address (default `http://10.42.0.1`) and on the wired
-address.
+Join the sign's Wi-Fi; the sign-in window opens the control page. From any
+network the sign is on, the page is at `http://protest.local`.
 
 The iPhone sign-in window is limited: it cannot save downloads. Open the page
 in Safari to download a backup or log bundle. After a software update, reload
@@ -42,11 +41,12 @@ and `/var/log/protest`.
 From an operator machine (non-interactive, auditable):
 
 ```sh
-scripts/deploy.sh --host 192.168.1.194 --user root
+scripts/deploy.sh --host protest.local --user root
 ```
 
-The host is configurable by `--host` or `PROTEST_DEPLOY_HOST`. SSH uses batch
-mode and strict host-key checking. Deployment never transfers `.env` files,
+The host defaults to `protest.local` and is configurable by `--host` or
+`PROTEST_DEPLOY_HOST`. SSH uses batch mode and strict host-key checking, so
+connect once with `ssh root@protest.local` to accept the host key. Deployment never transfers `.env` files,
 runtime data, media, or credentials. Each deploy creates a timestamped release
 under `/opt/protest/releases`, atomically repoints `/opt/protest/current`, and
 keeps the newest five releases (`KEEP_RELEASES`).
@@ -74,6 +74,14 @@ journalctl -u protest -f
 scripts/health-check.sh
 systemctl restart protest
 ```
+
+### The protest.local name
+
+The installer sets up `avahi-daemon`, which announces the sign as
+`<hostname>.local` on every network it joins, along with its web UI. With the
+hostname `protest` that is `protest.local`; on the sign's own Wi-Fi the AP's
+DNS answers the same name. If two signs share a network, the second becomes
+`protest-2.local`; give each its own hostname to tell them apart.
 
 ## Configuration
 

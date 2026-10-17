@@ -30,7 +30,7 @@ export DEBIAN_FRONTEND=noninteractive
 if [ "$INSTALL_PACKAGES" -eq 1 ]; then
     apt-get update -q
     apt-get install -y --no-install-recommends python3 python3-venv python3-pip curl rsync logrotate \
-        ffmpeg fonts-dejavu-core
+        ffmpeg fonts-dejavu-core avahi-daemon
 fi
 
 install -d -m 0755 /opt/protest /etc/protest /var/lib/protest /var/log/protest
@@ -73,6 +73,12 @@ install -d -m 0755 /etc/systemd/journald.conf.d
 install -m 0644 "$release/deploy/journald/60-protest-persistent.conf" \
     /etc/systemd/journald.conf.d/60-protest-persistent.conf
 install -m 0644 "$release/deploy/logrotate/protest" /etc/logrotate.d/protest
+# Announce the sign as <hostname>.local on every network it joins.
+if [ -d /etc/avahi/services ]; then
+    install -m 0644 "$release/deploy/avahi/protest.service" /etc/avahi/services/protest.service
+    systemctl enable avahi-daemon >/dev/null 2>&1 || true
+    systemctl restart avahi-daemon || echo "warning: avahi-daemon did not start; protest.local will not resolve" >&2
+fi
 install -d -m 2755 /var/log/journal
 systemd-tmpfiles --create --prefix /var/log/journal
 systemctl restart systemd-journald

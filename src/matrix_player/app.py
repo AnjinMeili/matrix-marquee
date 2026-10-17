@@ -23,7 +23,8 @@ from .playback import (
     PlaybackService,
     UnavailablePlaybackController,
 )
-from .routes import captive, media, playback, playlists, system, text_panels
+from . import display
+from .routes import captive, display as display_routes, media, playback, playlists, system, text_panels
 from .storage import MediaStorage
 from .transcode import VideoProxyWorker
 
@@ -110,6 +111,7 @@ def create_app(
             try:
                 adapter = matrix_adapter or _create_matrix(configured)
                 app.state.matrix = adapter
+                adapter.set_correction(display.load(app.state.database))
                 app.state.playback = DatabasePlaybackController(
                     PlaybackService(adapter), app.state.database, app.state.storage
                 )
@@ -183,6 +185,7 @@ def create_app(
     app.include_router(text_panels.router)
     app.include_router(playlists.router)
     app.include_router(playback.router)
+    app.include_router(display_routes.router)
     app.include_router(captive.router)
 
     static_dir = Path(__file__).parent / "static"

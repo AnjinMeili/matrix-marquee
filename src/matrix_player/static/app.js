@@ -1020,6 +1020,32 @@
     ].join("\n");
   }
 
+  // ---------- Brightness & gamma ----------
+
+  function renderDisplay(settings) {
+    state.display = settings;
+    document.querySelectorAll("input[data-display]").forEach((input) => {
+      if (document.activeElement !== input) input.value = settings[input.name];
+    });
+    document.querySelectorAll("output[data-out]").forEach((output) => {
+      const value = settings[output.dataset.out];
+      output.textContent = output.dataset.out === "brightness" ? `${value}%` : Number(value).toFixed(1);
+    });
+  }
+
+  let displayTimer = null;
+  function changeDisplay(input) {
+    const next = { ...(state.display || { brightness: 100, gamma: 1 }), [input.name]: Number(input.value) };
+    renderDisplay(next);  // keeps the Sign page and Settings sliders in step
+    clearTimeout(displayTimer);
+    displayTimer = setTimeout(async () => {
+      try {
+        renderDisplay(await send("/api/display", next, "PUT"));
+        $("#display-status").textContent = `Saved: brightness ${next.brightness}%, gamma ${next.gamma.toFixed(1)}.`;
+      } catch (error) { fail(error); }
+    }, 200);
+  }
+
   // ---------- Heat & power ----------
 
   const HEALTH_LEVEL = { ok: "Normal", warning: "Check", critical: "Problem", unknown: "No sensors" };
@@ -1199,11 +1225,12 @@
     // Fonts load on their own so one failing list can never leave the editor fontless.
     await loadFonts();
     try {
-      const [status, network, playlists, media, panels, diagnostics, tags, health] = await Promise.all([
+      const [status, network, playlists, media, panels, diagnostics, tags, health, display] = await Promise.all([
         request("/api/status"), request("/api/network"), request("/api/playlists"),
         request("/api/media"), request("/api/text-panels"), request("/api/diagnostics"),
-        request("/api/media/tags"), request("/api/health")
+        request("/api/media/tags"), request("/api/health"), request("/api/display")
       ]);
+      renderDisplay(display);
       Object.assign(state, { playlists, media, panels, tags });
       if (state.tagFilter && !tags.some((tag) => tag.name === state.tagFilter)) state.tagFilter = null;
       renderPlaylists(); renderMedia(); renderPanels();
@@ -1296,6 +1323,7 @@
   });
 
   document.addEventListener("input", (event) => {
+    if (event.target.matches("input[data-display]")) changeDisplay(event.target);
     if (event.target.closest("#text-form")) {
       syncTextFields($("#text-form"));
       schedulePreview();
@@ -1334,6 +1362,19 @@
     },
     "new-playlist": () => openPlaylistDialog(),
     "new-text-panel": () => openTextEditor(),
+    "test-card": async () => {
+      try {
+        await request("/api/display/test-card", { method: "POST" });
+        notice("The test card is on the sign. Adjust, then tap Back to playlist.");
+        refreshStatus();
+      } catch (error) { fail(error); }
+    },
+    "reset-display": async () => {
+      try {
+        renderDisplay(await send("/api/display", { brightness: 100, gamma: 1 }, "PUT"));
+        $("#display-status").textContent = "Back to normal: brightness 100%, gamma 1.0.";
+      } catch (error) { fail(error); }
+    },
     "start-over": () => {
       const id = state.status?.playback?.playlist_id;
       if (id) startPlaylist(id, true);

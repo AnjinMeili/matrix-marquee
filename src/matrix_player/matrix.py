@@ -4,6 +4,8 @@ from typing import List, Optional, Protocol, Tuple
 
 from PIL import Image
 
+from .display import Correction, gamma_table
+
 
 @dataclass(frozen=True)
 class MatrixConfig:
@@ -42,6 +44,10 @@ class MatrixAdapter(Protocol):
     def blank(self) -> None:
         ...
 
+    def set_correction(self, correction: Correction) -> None:
+        """Applies brightness and gamma, redrawing the current frame at once."""
+        ...
+
     def close(self) -> None:
         ...
 
@@ -57,6 +63,8 @@ class MockMatrixAdapter:
         self._lock = threading.RLock()
         self._frame = Image.new("RGB", size)
         self._history: List[Image.Image] = []
+        self._correction = Correction()
+        self._table: Optional[List[int]] = None
         self.closed = False
 
     @property
@@ -70,8 +78,19 @@ class MockMatrixAdapter:
 
     @property
     def history(self) -> List[Image.Image]:
+        """What the panel actually lit, after brightness and gamma."""
         with self._lock:
             return [frame.copy() for frame in self._history]
+
+    @property
+    def correction(self) -> Correction:
+        with self._lock:
+            return self._correction
+
+    def _output(self, frame: Image.Image) -> None:
+        output = frame.point(self._table) if self._table else frame.copy()
+        self._history.append(output)
+        del self._history[:-self.max_history]
 
     def show(self, image: Image.Image) -> None:
         frame = image.convert("RGB")
@@ -81,8 +100,17 @@ class MockMatrixAdapter:
             if self.closed:
                 raise RuntimeError("matrix is closed")
             self._frame = frame.copy()
-            self._history.append(self._frame.copy())
-            del self._history[:-self.max_history]
+            self._output(self._frame)
+
+    def set_correction(self, correction: Correction) -> None:
+        with self._lock:
+            self._correction = correction
+            # Software stand-in for the driver's brightness, so tests see its effect.
+            self._table = None if correction.is_identity else gamma_table(
+                correction.gamma, correction.brightness / 100
+            )
+            if not self.closed:
+                self._output(self._frame)
 
     def blank(self) -> None:
         self.show(Image.new("RGB", self.size))
@@ -125,6 +153,8 @@ class RGBMatrixAdapter:
         # Draw off-screen and swap on vsync so motion never tears mid-refresh.
         self._canvas = self._matrix.CreateFrameCanvas()
         self._frame = Image.new("RGB", self._size)
+        self._correction = Correction()
+        self._table: Optional[List[int]] = None
         self._lock = threading.RLock()
 
     @property
@@ -137,6 +167,18 @@ class RGBMatrixAdapter:
         with self._lock:
             return self._frame.copy()
 
+    @property
+    def correction(self) -> Correction:
+        with self._lock:
+            return self._correction
+
+    def _draw(self, frame: Image.Image) -> None:
+        # Brightness and the driver's CIE curve are applied as pixels are drawn,
+        # per canvas, so each of the two swapped canvases is set before drawing.
+        self._canvas.brightness = self._correction.brightness
+        self._canvas.SetImage(frame.point(self._table) if self._table else frame)
+        self._canvas = self._matrix.SwapOnVSync(self._canvas)
+
     def show(self, image: Image.Image) -> None:
         if image.size != self.size:
             raise ValueError("frame size {} does not match matrix {}".format(image.size, self.size))
@@ -144,15 +186,20 @@ class RGBMatrixAdapter:
         with self._lock:
             # The Rotate:90 pixel mapper already presents the driver's 64x96
             # framebuffer as a 96x64 canvas, so frames are sent through as-is.
-            self._canvas.SetImage(frame)
-            self._canvas = self._matrix.SwapOnVSync(self._canvas)
+            self._draw(frame)
             self._frame = frame
+
+    def set_correction(self, correction: Correction) -> None:
+        with self._lock:
+            self._correction = correction
+            self._table = None if abs(correction.gamma - 1.0) < 1e-6 else gamma_table(correction.gamma)
+            self._draw(self._frame)  # a held still picture changes straight away
 
     def blank(self) -> None:
         with self._lock:
+            self._frame = Image.new("RGB", self._size)
             self._canvas.Clear()
             self._canvas = self._matrix.SwapOnVSync(self._canvas)
-            self._frame = Image.new("RGB", self._size)
 
     def close(self) -> None:
         self.blank()

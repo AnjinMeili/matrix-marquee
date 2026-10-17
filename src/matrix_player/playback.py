@@ -53,6 +53,7 @@ class PlaybackController(Protocol):
     def send_text_panel(
         self, panel_id: int, duration_ms: Optional[int] = None
     ) -> PlaybackState: ...
+    def show_image(self, image: Image.Image, label: str) -> PlaybackState: ...
     def release(self) -> PlaybackState: ...
     def pause(self) -> PlaybackState: ...
     def resume(self) -> PlaybackState: ...
@@ -120,6 +121,9 @@ class InMemoryPlaybackController:
         self, panel_id: int, duration_ms: Optional[int] = None
     ) -> PlaybackState:
         return self._send("text_panel", panel_id)
+
+    def show_image(self, image: Image.Image, label: str) -> PlaybackState:
+        return self._send("media", 0)
 
     def release(self) -> PlaybackState:
         with self._lock:
@@ -636,6 +640,9 @@ class UnavailablePlaybackController:
     ) -> PlaybackState:
         return self._unavailable()
 
+    def show_image(self, image: Image.Image, label: str) -> PlaybackState:
+        return self._unavailable()
+
     def release(self) -> PlaybackState:
         return self._unavailable()
 
@@ -901,6 +908,12 @@ class DatabasePlaybackController:
         duration = (duration_ms or DEFAULT_SEND_DURATION_MS) / 1000.0
         source = self._text_builder(row, duration)()
         self._send(source, duration, "text_panel", row["name"], PlayBy.TIME.value)
+        return self.state()
+
+    def show_image(self, image: Image.Image, label: str) -> PlaybackState:
+        """Holds a generated picture, such as the test card, until released."""
+        source = ImageFrameSource(image, self.service.matrix.size, DEFAULT_SEND_DURATION_MS / 1000.0, "stretch")
+        self._send(source, DEFAULT_SEND_DURATION_MS / 1000.0, "media", label, PlayBy.TIME.value)
         return self.state()
 
     def _send(

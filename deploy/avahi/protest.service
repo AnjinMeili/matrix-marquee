@@ -1,0 +1,17 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- Announces the sign's web UI over mDNS on every network it joins.
+     The host itself answers as <hostname>.local (protest.local by default). -->
+<service-group>
+  <name replace-wildcards="yes">Protest sign (%h)</name>
+  <service>
+    <type>_http._tcp</type>
+    <port>80</port>
+    <txt-record>path=/</txt-record>
+  </service>
+  <service>
+    <type>_protest-sign._tcp</type>
+    <port>80</port>
+    <txt-record>api=/api/status</txt-record>
+  </service>
+</service-group>

@@ -6,12 +6,12 @@ usage() {
 Usage: deploy.sh [--host HOST] [--user USER] [--port PORT] [--identity FILE]
                  [--skip-os-packages] [--no-start]
 
-Default target is root@192.168.1.194. Uses SSH batch mode and never transfers
+Default target is root@protest.local. Uses SSH batch mode and never transfers
 .env, secrets, uploaded content, runtime data, or local build artifacts.
 EOF
 }
 
-HOST=${PROTEST_DEPLOY_HOST:-192.168.1.194}
+HOST=${PROTEST_DEPLOY_HOST:-protest.local}
 USER=${PROTEST_DEPLOY_USER:-root}
 PORT=${PROTEST_DEPLOY_PORT:-22}
 IDENTITY=

@@ -90,6 +90,10 @@ CREATE TABLE IF NOT EXISTS health_events (
     detail TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_health_events_at ON health_events(at);
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 # Additive column migrations, applied in order to databases created by older
