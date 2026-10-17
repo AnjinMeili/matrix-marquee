@@ -17,10 +17,10 @@
         <span>Matrix Player</span>
       </a>
       <nav class="main-nav" aria-label="Main navigation">
-        <a href="#dashboard" data-view="dashboard"><span aria-hidden="true">⌂</span> Dashboard</a>
-        <a href="#library" data-view="library"><span aria-hidden="true">▧</span> Media</a>
+        <a href="#dashboard" data-view="dashboard"><span aria-hidden="true">⌂</span> Sign</a>
+        <a href="#text" data-view="text"><span aria-hidden="true">T</span> Messages</a>
         <a href="#playlists" data-view="playlists"><span aria-hidden="true">☷</span> Playlists</a>
-        <a href="#text" data-view="text"><span aria-hidden="true">T</span> Text panels</a>
+        <a href="#library" data-view="library"><span aria-hidden="true">▧</span> Pictures &amp; videos</a>
         <a href="#settings" data-view="settings"><span aria-hidden="true">⚙</span> Settings</a>
       </nav>
       <div class="connection-card" aria-live="polite">
@@ -37,97 +37,108 @@
 
       <section class="view" id="dashboard" aria-labelledby="dashboard-title">
         <header class="page-header">
-          <div><p class="eyebrow">Local control</p><h1 id="dashboard-title">Dashboard</h1><p class="subtitle" id="dashboard-summary">Loading player state…</p></div>
-          <button class="button primary" data-action="open-upload">＋ Add media</button>
+          <div><p class="eyebrow">Live sign</p><h1 id="dashboard-title">What's on the sign</h1><p class="subtitle" id="dashboard-summary">Loading player state…</p></div>
+          <button class="button primary" data-action="new-text-panel">＋ New message</button>
         </header>
         <div class="dashboard-grid">
           <article class="card output-card">
-            <div class="card-heading"><div><p class="eyebrow">Live output</p><h2 id="now-title">Nothing playing</h2></div><span class="pill" id="playback-pill">Stopped</span></div>
+            <div class="card-heading"><div><p class="eyebrow">Showing now</p><h2 id="now-title">Nothing playing</h2></div><span class="pill" id="playback-pill">Stopped</span></div>
             <div class="matrix-frame">
-              <div class="matrix-preview" id="live-preview" role="img" aria-label="Live matrix output preview">
-                <div class="preview-copy"><strong>MATRIX</strong><small>Ready for playback</small></div>
+              <div class="matrix-preview" id="live-preview" role="img" aria-label="Live copy of the sign">
+                <img id="live-frame" alt="" hidden>
+                <div class="preview-copy" id="live-placeholder"><strong>MATRIX</strong><small>Ready</small></div>
               </div>
             </div>
-            <p class="progress-label"><span id="now-detail">Select a playlist to begin</span><span id="now-progress">—</span></p>
+            <p class="progress-label"><span id="now-detail">Pick a playlist or message to begin</span><span id="now-progress">—</span></p>
+            <div id="now-warnings" class="warning-list" hidden></div>
             <div class="send-banner" id="send-banner" hidden>
-              <p>Showing <strong id="send-label"></strong> on the panel.<span id="send-resume"></span></p>
-              <button class="button primary" data-playback="release">Done viewing</button>
+              <p>Showing <strong id="send-label"></strong> right now.</p>
+              <button class="button primary" data-playback="release" id="release-button">Back to playlist</button>
             </div>
             <div class="transport" aria-label="Playback controls">
-              <button class="button" data-playback="pause" aria-label="Pause playback">Ⅱ <span>Pause</span></button>
-              <button class="button" data-playback="resume" aria-label="Resume playback">▶ <span>Resume</span></button>
-              <button class="button danger" data-playback="stop" aria-label="Stop playback">■ <span>Stop</span></button>
+              <button class="button" data-playback="pause" id="pause-button">Ⅱ Pause</button>
+              <button class="button primary" data-playback="resume" id="resume-button" hidden>▶ Resume</button>
+              <button class="button" data-action="start-over" id="restart-button" hidden>⟲ Start over</button>
+              <button class="button danger" data-playback="stop" id="stop-button">■ Turn off sign</button>
             </div>
           </article>
-          <article class="card health-card">
-            <div class="card-heading"><div><p class="eyebrow">Device</p><h2>System health</h2></div><button class="text-button" data-action="refresh-status">Refresh</button></div>
-            <dl class="metrics">
-              <div><dt>Matrix</dt><dd id="health-matrix">—</dd></div>
-              <div><dt>Temperature</dt><dd id="health-temp">—</dd></div>
-              <div><dt>Storage</dt><dd id="health-storage">—</dd></div>
-              <div><dt>Wi-Fi access point</dt><dd id="health-network">—</dd></div>
-              <div><dt>Upstream</dt><dd id="health-upstream">—</dd></div>
-            </dl>
+          <article class="card quick-card">
+            <div class="card-heading"><div><p class="eyebrow">Fast</p><h2>Quick message</h2></div></div>
+            <form id="quick-form" class="quick-form">
+              <label>Message<textarea name="content" maxlength="300" rows="2" required placeholder="Type it, then show it"></textarea></label>
+              <div class="preset-row" id="quick-presets" role="radiogroup" aria-label="Look"></div>
+              <button type="submit" class="button primary">Show it now</button>
+            </form>
           </article>
           <article class="card wide">
-            <div class="card-heading"><div><p class="eyebrow">Quick start</p><h2>Play a playlist</h2></div><a href="#playlists" class="text-link">Manage playlists</a></div>
+            <div class="card-heading"><div><p class="eyebrow">Playlists</p><h2>Play a playlist</h2></div><a href="#playlists" class="text-link">Edit playlists</a></div>
             <div id="dashboard-playlists" class="compact-list"><p class="empty">Loading playlists…</p></div>
           </article>
-        </div>
-      </section>
-
-      <section class="view" id="library" aria-labelledby="library-title" hidden>
-        <header class="page-header">
-          <div><p class="eyebrow">Content</p><h1 id="library-title">Media library</h1><p class="subtitle">Images, GIFs, and videos stored on this device.</p></div>
-          <button class="button primary" data-action="open-upload">＋ Upload files</button>
-        </header>
-        <div class="toolbar card">
-          <label class="search-field"><span class="sr-only">Search media</span><span aria-hidden="true">⌕</span><input id="media-search" type="search" placeholder="Search media" autocomplete="off"></label>
-          <label><span class="sr-only">Filter media type</span><select id="media-filter"><option value="">All types</option><option value="image">Images</option><option value="gif">GIFs</option><option value="video">Videos</option></select></label>
-          <span id="media-count" class="muted">0 items</span>
-        </div>
-        <div id="media-grid" class="media-grid" aria-live="polite"></div>
-      </section>
-
-      <section class="view" id="playlists" aria-labelledby="playlists-title" hidden>
-        <header class="page-header">
-          <div><p class="eyebrow">Playback</p><h1 id="playlists-title">Playlists</h1><p class="subtitle">Build and arrange what appears on the matrix.</p></div>
-          <button class="button primary" data-action="new-playlist">＋ New playlist</button>
-        </header>
-        <div class="split-layout">
-          <aside class="card collection-panel" aria-label="Playlist list">
-            <div id="playlist-list" class="selection-list"></div>
-          </aside>
-          <article class="card editor-panel" id="playlist-editor">
-            <div class="empty-state"><span class="empty-icon">☷</span><h2>Select a playlist</h2><p>Choose one from the list or create a new playlist.</p></div>
+          <article class="card health-card wide">
+            <div class="card-heading"><div><p class="eyebrow">Device</p><h2>System health</h2></div><button class="text-button" data-action="refresh-status">Refresh</button></div>
+            <dl class="metrics">
+              <div><dt>Sign</dt><dd id="health-matrix">—</dd></div>
+              <div><dt>Temperature</dt><dd id="health-temp">—</dd></div>
+              <div><dt>Storage</dt><dd id="health-storage">—</dd></div>
+              <div><dt>Wi-Fi</dt><dd id="health-network">—</dd></div>
+              <div><dt>Internet</dt><dd id="health-upstream">—</dd></div>
+            </dl>
           </article>
         </div>
       </section>
 
       <section class="view" id="text" aria-labelledby="text-title" hidden>
         <header class="page-header">
-          <div><p class="eyebrow">Content</p><h1 id="text-title">Text panels</h1><p class="subtitle">Create messages formatted for the matrix.</p></div>
-          <button class="button primary" data-action="new-text-panel">＋ New panel</button>
+          <div><p class="eyebrow">Signs</p><h1 id="text-title">Messages</h1><p class="subtitle">Big, bold text with colour and motion.</p></div>
+          <button class="button primary" data-action="new-text-panel">＋ New message</button>
         </header>
         <div class="split-layout">
-          <aside class="card collection-panel" aria-label="Text panel list">
+          <aside class="card collection-panel" aria-label="Messages">
             <div id="text-list" class="selection-list"></div>
           </aside>
-          <article class="card editor-panel" id="text-editor">
-            <div class="empty-state"><span class="empty-icon">T</span><h2>Select a text panel</h2><p>Choose one from the list or create a new panel.</p></div>
+          <article class="card editor-panel" id="text-detail">
+            <div class="empty-state"><span class="empty-icon">T</span><h2>Pick a message</h2><p>Choose one from the list, or make a new one.</p></div>
           </article>
         </div>
       </section>
 
+      <section class="view" id="playlists" aria-labelledby="playlists-title" hidden>
+        <header class="page-header">
+          <div><p class="eyebrow">Running order</p><h1 id="playlists-title">Playlists</h1><p class="subtitle">Line up messages, pictures, and videos.</p></div>
+          <button class="button primary" data-action="new-playlist">＋ New playlist</button>
+        </header>
+        <div class="split-layout">
+          <aside class="card collection-panel" aria-label="Playlists">
+            <div id="playlist-list" class="selection-list"></div>
+          </aside>
+          <article class="card editor-panel" id="playlist-editor">
+            <div class="empty-state"><span class="empty-icon">☷</span><h2>Pick a playlist</h2><p>Choose one from the list, or make a new one.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="library" aria-labelledby="library-title" hidden>
+        <header class="page-header">
+          <div><p class="eyebrow">Content</p><h1 id="library-title">Pictures &amp; videos</h1><p class="subtitle">Photos, animated GIFs, and videos stored on the sign.</p></div>
+          <button class="button primary" data-action="open-upload">＋ Add from phone</button>
+        </header>
+        <div class="toolbar card">
+          <label class="search-field"><span class="sr-only">Search</span><span aria-hidden="true">⌕</span><input id="media-search" type="search" placeholder="Search" autocomplete="off"></label>
+          <label><span class="sr-only">Show only</span><select id="media-filter"><option value="">Everything</option><option value="image">Pictures</option><option value="gif">Animated GIFs</option><option value="video">Videos</option></select></label>
+          <span id="media-count" class="muted">0 items</span>
+        </div>
+        <div id="media-grid" class="media-grid" aria-live="polite"></div>
+      </section>
+
       <section class="view" id="settings" aria-labelledby="settings-title" hidden>
         <header class="page-header">
-          <div><p class="eyebrow">Device</p><h1 id="settings-title">Settings & diagnostics</h1><p class="subtitle">Local appliance and network information.</p></div>
+          <div><p class="eyebrow">Device</p><h1 id="settings-title">Settings &amp; diagnostics</h1><p class="subtitle">Appliance and network information.</p></div>
           <button class="button" data-action="refresh-diagnostics">Refresh</button>
         </header>
         <div class="settings-grid">
           <article class="card"><div class="card-heading"><div><p class="eyebrow">Connection</p><h2>Network</h2></div><span class="status-dot" id="settings-network-dot"></span></div><dl class="metrics" id="network-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl></article>
           <article class="card"><p class="eyebrow">Hardware</p><h2>Matrix profile</h2><dl class="metrics" id="matrix-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl><p class="form-help">Hardware configuration is managed on the appliance.</p></article>
-          <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Support</p><h2>Diagnostics</h2></div></div><div id="diagnostic-summary" class="diagnostic-box">Checking services…</div><div class="button-row"><button class="button" data-action="copy-diagnostics">Copy summary</button><a class="button" href="/api/diagnostics/logs" download>Download log bundle</a></div><p class="form-help">Log bundles should exclude credentials and uploaded content.</p></article>
+          <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Support</p><h2>Diagnostics</h2></div></div><div id="diagnostic-summary" class="diagnostic-box">Checking services…</div><div class="button-row"><button class="button" data-action="copy-diagnostics">Copy summary</button><a class="button" href="/api/diagnostics/logs" download>Download log bundle</a></div><p class="form-help">Log bundles leave out passwords, message text, and file names.</p></article>
         </div>
       </section>
     </main>
@@ -135,77 +146,121 @@
 
   <dialog id="upload-dialog">
     <form id="upload-form">
-      <div class="dialog-header"><div><p class="eyebrow">Media library</p><h2>Upload media</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close upload dialog">×</button></div>
-      <label class="drop-zone" for="media-files"><span class="drop-icon">⇧</span><strong>Choose files</strong><span>Images, animated GIFs, or supported video</span><input id="media-files" name="files" type="file" accept="image/*,video/*" multiple required></label>
-      <div id="upload-files" class="file-selection muted">No files selected</div>
-      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Upload</button></div>
+      <div class="dialog-header"><div><p class="eyebrow">Pictures &amp; videos</p><h2>Add from phone</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close">×</button></div>
+      <label class="drop-zone" for="media-files"><span class="drop-icon">⇧</span><strong>Choose photos or videos</strong><span>Pictures, animated GIFs, or videos</span><input id="media-files" name="files" type="file" accept="image/*,video/*" multiple required></label>
+      <div id="upload-files" class="upload-list muted">Nothing chosen yet</div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Close</button><button type="submit" class="button primary">Upload</button></div>
     </form>
   </dialog>
 
   <dialog id="playlist-dialog">
     <form id="playlist-form">
-      <div class="dialog-header"><div><p class="eyebrow">Playlist</p><h2 id="playlist-dialog-title">Create playlist</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close playlist dialog">×</button></div>
-      <label>Playlist name<input name="name" maxlength="80" required placeholder="e.g. Welcome loop"></label>
-      <label>Description<textarea name="description" maxlength="300" placeholder="Optional description"></textarea></label>
+      <div class="dialog-header"><div><p class="eyebrow">Playlist</p><h2 id="playlist-dialog-title">New playlist</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close">×</button></div>
+      <label>Name<input name="name" maxlength="80" required placeholder="e.g. March loop"></label>
+      <label>Notes<textarea name="description" maxlength="300" rows="2" placeholder="Optional"></textarea></label>
+      <label>Order<select name="play_mode">
+        <option value="loop">In order, then repeat</option>
+        <option value="shuffle">Shuffle (every item once, mixed up)</option>
+        <option value="random">Random (any item, any time)</option>
+        <option value="once">In order, stop at the end</option>
+      </select></label>
       <div class="form-grid">
-        <label class="checkbox"><input name="is_enabled" type="checkbox" checked> Enabled</label>
-        <label class="checkbox"><input name="is_default" type="checkbox"> Default playlist</label>
+        <label class="checkbox"><input name="is_enabled" type="checkbox" checked> Can be played</label>
+        <label class="checkbox"><input name="is_default" type="checkbox"> Play when the sign turns on</label>
       </div>
       <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary" id="playlist-submit">Create playlist</button></div>
     </form>
   </dialog>
 
-  <dialog id="add-to-playlist-dialog">
-    <form id="add-to-playlist-form">
-      <div class="dialog-header"><div><p class="eyebrow">Playlists</p><h2>Add to playlist</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close add to playlist dialog">×</button></div>
-      <p class="form-help" id="add-to-playlist-target">—</p>
-      <label>Playlist<select name="playlist_id" id="add-to-playlist-select" required></select></label>
-      <div class="form-grid">
-        <label>Duration (seconds)<input name="duration" type="number" min="0.1" max="3600" step="0.1" value="6" required></label>
-        <label>Fit mode<select name="fit_mode"><option value="stretch">Stretch to fill</option><option value="fit">Fit</option><option value="crop">Crop</option><option value="letterbox">Letterbox</option></select></label>
-        <label>Transition<select name="transition"><option value="fade">Fade</option><option value="none">Cut</option><option value="slide_left">Slide left</option><option value="slide_right">Slide right</option><option value="slide_up">Slide up</option><option value="slide_down">Slide down</option><option value="rotate">Rotate</option></select></label>
-        <label>Transition duration (seconds)<input name="transition_duration" type="number" min="0" max="10" step="0.1" value="0.5"></label>
+  <dialog id="item-dialog">
+    <form id="item-form">
+      <div class="dialog-header"><div><p class="eyebrow">Playlist item</p><h2 id="item-dialog-title">Add to playlist</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close">×</button></div>
+      <label id="item-playlist-row">Playlist<select name="playlist_id" id="item-playlist"></select></label>
+      <div class="form-grid" id="item-content-row">
+        <label>What<select name="item_type" id="item-type"><option value="text_panel">A message</option><option value="media">A picture or video</option></select></label>
+        <label>Which one<select name="content_id" id="item-content" required></select></label>
       </div>
-      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Add to playlist</button></div>
+      <fieldset class="timing" id="item-timing">
+        <legend>How long</legend>
+        <label class="radio"><input type="radio" name="play_by" value="time" checked> Show for <input name="duration" type="number" min="0.5" max="3600" step="0.5" value="6" inputmode="decimal" class="inline-number"> seconds</label>
+        <label class="radio" id="item-repeats-row"><input type="radio" name="play_by" value="repeats"> Play the animation <input name="repeats" type="number" min="1" max="999" value="1" inputmode="numeric" class="inline-number"> time(s)</label>
+      </fieldset>
+      <div class="form-grid">
+        <label>Entrance<select name="transition" id="item-transition"></select></label>
+        <label>Entrance speed<select name="transition_duration"><option value="300">Quick</option><option value="600" selected>Normal</option><option value="1200">Slow</option></select></label>
+        <label id="item-fit-row" class="full">Picture fit<select name="fit_mode">
+          <option value="crop">Fill the sign (trim edges)</option>
+          <option value="fit">Show the whole picture</option>
+          <option value="stretch">Stretch to fill</option>
+        </select></label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary" id="item-submit">Add</button></div>
     </form>
   </dialog>
 
-  <dialog id="add-item-dialog">
-    <form id="add-item-form">
-      <div class="dialog-header"><div><p class="eyebrow">Playlist item</p><h2>Add content</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close add item dialog">×</button></div>
-      <label>Content type<select name="item_type" id="item-type"><option value="media">Media</option><option value="text_panel">Text panel</option></select></label>
-      <label>Content<select name="content_id" id="item-content" required></select></label>
-      <div class="form-grid">
-        <label>Duration (seconds)<input name="duration" type="number" min="0.1" max="3600" step="0.1" value="5" required></label>
-        <label>Repeats<input name="repeats" type="number" min="1" max="999" value="1" required></label>
-        <label>Transition<select name="transition"><option value="none">Cut</option><option value="fade">Fade</option><option value="slide_left">Slide left</option><option value="slide_right">Slide right</option><option value="slide_up">Slide up</option><option value="slide_down">Slide down</option><option value="rotate">Rotate</option></select></label>
-        <label>Transition duration (seconds)<input name="transition_duration" type="number" min="0" max="10" step="0.1" value="0.5"></label>
-        <label>Fit mode<select name="fit_mode"><option value="fit">Fit</option><option value="stretch">Stretch to fill</option><option value="crop">Crop</option><option value="letterbox">Letterbox</option></select></label>
-      </div>
-      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Add item</button></div>
-    </form>
-  </dialog>
-
-  <dialog id="text-dialog">
+  <dialog id="text-dialog" class="wide-dialog">
     <form id="text-form">
-      <div class="dialog-header"><div><p class="eyebrow">Text panel</p><h2>Create text panel</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close text panel dialog">×</button></div>
-      <label>Panel name<input name="name" maxlength="80" required placeholder="e.g. Rally time"></label>
-      <label>Message<textarea name="content" maxlength="2000" required placeholder="Text shown on the matrix"></textarea></label>
-      <div class="form-grid">
-        <label>Font size<input name="font_size" type="number" min="4" max="128" value="12" required></label>
-        <label>Alignment<select name="alignment"><option value="center">Center</option><option value="left">Left</option><option value="right">Right</option></select></label>
-        <label>Text colour<input name="color_value" type="color" value="#ffffff"></label>
-        <label>Border<select name="border_style"><option value="none">None</option><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="double">Double</option></select></label>
+      <div class="dialog-header"><div><p class="eyebrow">Message</p><h2 id="text-dialog-title">New message</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close">×</button></div>
+      <div class="sign-preview-wrap">
+        <div class="sign-preview"><img id="text-preview" alt="Preview of the message on the sign"></div>
+        <p class="form-help" id="text-preview-status">Preview updates as you type.</p>
       </div>
-      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Create panel</button></div>
+      <label>Message<textarea name="content" maxlength="2000" rows="2" required placeholder="NO KINGS"></textarea></label>
+      <div>
+        <p class="field-label">Quick looks</p>
+        <div class="preset-row" id="text-presets"></div>
+      </div>
+      <div class="form-grid">
+        <label>Font<select name="font_family" id="text-font"></select></label>
+        <label>Size<select name="font_size"><option value="0">Fill the sign</option><option value="12">Small</option><option value="20">Medium</option><option value="32">Large</option><option value="48">Huge</option></select></label>
+        <div class="toggle-row full">
+          <label class="checkbox"><input name="bold" type="checkbox"> <b>Bold</b></label>
+          <label class="checkbox"><input name="italic" type="checkbox"> <i>Italic</i></label>
+          <label class="checkbox"><input name="outline" type="checkbox" checked> Outline</label>
+        </div>
+        <label>Colour style<select name="color_mode">
+          <option value="solid">One colour</option>
+          <option value="rainbow">Rainbow</option>
+          <option value="plasma">Plasma</option>
+          <option value="cycle">Changing colours</option>
+          <option value="fire">Fire</option>
+        </select></label>
+        <label>Text colour<input name="color_value" type="color" value="#ffdd00"></label>
+        <label>Motion<select name="effect">
+          <option value="none">Still</option>
+          <option value="scroll">Scroll right to left ←</option>
+          <option value="scroll_right">Scroll left to right →</option>
+          <option value="pulse">Pulse</option>
+          <option value="shake">Shake</option>
+          <option value="flash">Flash on and off</option>
+          <option value="pow">Comic POW burst</option>
+          <option value="zoom">Punch in</option>
+        </select></label>
+        <label>Motion speed<select name="motion_speed"><option value="slow">Slow</option><option value="normal" selected>Normal</option><option value="fast">Fast</option></select></label>
+        <label>Outline colour<input name="outline_color" type="color" value="#000000"></label>
+        <label id="accent-row">Burst colour<input name="accent_color" type="color" value="#ffd400"></label>
+        <label>Border<select name="border_style">
+          <option value="none">None</option>
+          <option value="solid">Solid line</option>
+          <option value="dashed">Dashed line</option>
+          <option value="double">Double line</option>
+          <option value="marquee">Chasing lights</option>
+          <option value="rainbow">Rainbow</option>
+        </select></label>
+        <label>Border colour<input name="border_color" type="color" value="#ffffff"></label>
+        <label>Background colour<input name="background_color" type="color" value="#000000"></label>
+        <label>Background picture<select name="background_media_id" id="text-background"></select></label>
+        <label>Line up<select name="alignment"><option value="center">Centre</option><option value="left">Left</option><option value="right">Right</option></select></label>
+        <label>Name<input name="name" maxlength="120" placeholder="Uses the message if blank"></label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="button" class="button" data-action="save-and-show">Save &amp; show now</button><button type="submit" class="button primary" id="text-submit">Save</button></div>
     </form>
   </dialog>
-
   <dialog id="confirm-dialog">
     <form id="confirm-form" method="dialog">
-      <div class="dialog-header"><div><p class="eyebrow">Please confirm</p><h2 id="confirm-title">Delete item?</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close confirmation">×</button></div>
+      <div class="dialog-header"><div><p class="eyebrow">Please confirm</p><h2 id="confirm-title">Delete?</h2></div></div>
       <p id="confirm-message">This cannot be undone.</p>
-      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button danger-fill">Delete</button></div>
+      <div class="dialog-actions"><button type="submit" value="cancel" class="button" autofocus>Cancel</button><button type="submit" value="ok" class="button danger-fill" id="confirm-ok">Delete</button></div>
     </form>
   </dialog>
 </body>

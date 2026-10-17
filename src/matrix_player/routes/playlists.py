@@ -1,9 +1,10 @@
 """Playlist and ordered item CRUD endpoints."""
 
+import logging
 import sqlite3
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..database import Database
 from ..schemas import (
@@ -18,11 +19,16 @@ from .dependencies import get_database
 
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
-PLAYLIST_FIELDS = ("name", "description", "is_default", "is_enabled")
+logger = logging.getLogger(__name__)
+PLAYLIST_FIELDS = ("name", "description", "is_default", "is_enabled", "play_mode")
 ITEM_FIELDS = (
     "item_type", "media_id", "text_panel_id", "duration_ms", "repeat_count",
-    "transition_type", "transition_duration_ms", "fit_mode",
+    "transition_type", "transition_duration_ms", "fit_mode", "play_by",
 )
+
+
+def _db_value(value: object) -> object:
+    return value.value if hasattr(value, "value") else value
 
 
 def _playlist(playlist_id: int, database: Database) -> Playlist:
@@ -69,11 +75,13 @@ def create_playlist(
     values = body.model_dump()
     with database.transaction() as connection:
         cursor = connection.execute(
-            f"INSERT INTO playlists ({','.join(PLAYLIST_FIELDS)}) VALUES (?,?,?,?)",
-            tuple(values[field] for field in PLAYLIST_FIELDS),
+            f"INSERT INTO playlists ({','.join(PLAYLIST_FIELDS)}) "
+            f"VALUES ({','.join('?' for _ in PLAYLIST_FIELDS)})",
+            tuple(_db_value(values[field]) for field in PLAYLIST_FIELDS),
         )
         playlist_id = int(cursor.lastrowid)
         _set_default(connection, playlist_id, body.is_default)
+    logger.info("playlist_created", extra={"playlist_id": playlist_id})
     return _playlist(playlist_id, database)
 
 
@@ -95,9 +103,10 @@ def update_playlist(
             f"""UPDATE playlists SET
                 {','.join(f'{field} = ?' for field in PLAYLIST_FIELDS)},
                 updated_at = CURRENT_TIMESTAMP WHERE id = ?""",
-            tuple(values[field] for field in PLAYLIST_FIELDS) + (playlist_id,),
+            tuple(_db_value(values[field]) for field in PLAYLIST_FIELDS) + (playlist_id,),
         )
         _set_default(connection, playlist_id, body.is_default)
+    logger.info("playlist_updated", extra={"playlist_id": playlist_id})
     return _playlist(playlist_id, database)
 
 
@@ -106,6 +115,7 @@ def delete_playlist(playlist_id: int, database: Database = Depends(get_database)
     _playlist(playlist_id, database)
     with database.transaction() as connection:
         connection.execute("DELETE FROM playlists WHERE id = ?", (playlist_id,))
+    logger.info("playlist_deleted", extra={"playlist_id": playlist_id})
 
 
 @router.post("/{playlist_id}/duplicate", response_model=Playlist, status_code=201)
@@ -115,17 +125,20 @@ def duplicate_playlist(
     original = _playlist(playlist_id, database)
     with database.transaction() as connection:
         cursor = connection.execute(
-            """INSERT INTO playlists (name, description, is_default, is_enabled)
-               VALUES (?, ?, 0, ?)""",
-            (f"{original.name} copy", original.description, original.is_enabled),
+            """INSERT INTO playlists (name, description, is_default, is_enabled, play_mode)
+               VALUES (?, ?, 0, ?, ?)""",
+            (
+                f"{original.name} copy", original.description, original.is_enabled,
+                original.play_mode.value,
+            ),
         )
         new_id = int(cursor.lastrowid)
         connection.execute(
             """INSERT INTO playlist_items
                (playlist_id, position, item_type, media_id, text_panel_id, duration_ms,
-                repeat_count, transition_type, transition_duration_ms, fit_mode)
+                repeat_count, transition_type, transition_duration_ms, fit_mode, play_by)
                SELECT ?, position, item_type, media_id, text_panel_id, duration_ms,
-                      repeat_count, transition_type, transition_duration_ms, fit_mode
+                      repeat_count, transition_type, transition_duration_ms, fit_mode, play_by
                FROM playlist_items WHERE playlist_id = ?""",
             (new_id, playlist_id),
         )
@@ -161,13 +174,13 @@ def add_item(
                 (playlist_id, position, {','.join(ITEM_FIELDS)})
                 VALUES (?, ?, {','.join('?' for _ in ITEM_FIELDS)})""",
             (playlist_id, position) + tuple(
-                values[field].value if hasattr(values[field], "value") else values[field]
-                for field in ITEM_FIELDS
+                _db_value(values[field]) for field in ITEM_FIELDS
             ),
         )
         row = connection.execute(
             "SELECT * FROM playlist_items WHERE id = ?", (cursor.lastrowid,)
         ).fetchone()
+    logger.info("playlist_item_added", extra={"playlist_id": playlist_id, "item_id": row["id"]})
     return PlaylistItem.model_validate(dict(row))
 
 
@@ -226,10 +239,10 @@ def update_item(
                 {','.join(f'{field} = ?' for field in ITEM_FIELDS)}
                 WHERE id = ?""",
             (new_position,) + tuple(
-                values[field].value if hasattr(values[field], "value") else values[field]
-                for field in ITEM_FIELDS
+                _db_value(values[field]) for field in ITEM_FIELDS
             ) + (item_id,),
         )
+    logger.info("playlist_item_updated", extra={"playlist_id": playlist_id, "item_id": item_id})
     return _item(playlist_id, item_id, database)
 
 
@@ -246,17 +259,21 @@ def delete_item(
             "UPDATE playlist_items SET position = position - 1 WHERE playlist_id = ? AND position > ?",
             (playlist_id, item.position),
         )
+    logger.info("playlist_item_removed", extra={"playlist_id": playlist_id, "item_id": item_id})
 
 
 @router.post("/{playlist_id}/preview")
 def preview_playlist(
-    playlist_id: int, database: Database = Depends(get_database)
+    playlist_id: int, request: Request, database: Database = Depends(get_database)
 ) -> dict:
     playlist = _playlist(playlist_id, database)
+    matrix = request.app.state.matrix
+    settings = request.app.state.settings
+    width, height = matrix.size if matrix is not None else (settings.matrix_width, settings.matrix_height)
     return {
         "playlist_id": playlist.id,
-        "width": None,
-        "height": None,
+        "width": width,
+        "height": height,
         "item_count": len(playlist.items),
         "items": [item.model_dump(mode="json") for item in playlist.items],
     }

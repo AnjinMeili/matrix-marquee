@@ -29,7 +29,8 @@ export DEBIAN_FRONTEND=noninteractive
 
 if [ "$INSTALL_PACKAGES" -eq 1 ]; then
     apt-get update -q
-    apt-get install -y --no-install-recommends python3 python3-venv python3-pip curl rsync logrotate
+    apt-get install -y --no-install-recommends python3 python3-venv python3-pip curl rsync logrotate \
+        ffmpeg fonts-dejavu-core
 fi
 
 install -d -m 0755 /opt/protest /etc/protest /var/lib/protest /var/log/protest
@@ -79,5 +80,13 @@ if [ "$START_SERVICE" -eq 1 ]; then
     systemctl restart protest.service
     systemctl start protest-health.timer
 fi
+# Keep the newest releases for rollback and drop the rest so the SD card does
+# not fill up; the active release is never removed.
+KEEP_RELEASES=${KEEP_RELEASES:-5}
+current=$(readlink -f /opt/protest/current)
+ls -1d /opt/protest/releases/*/ 2>/dev/null | sed 's:/$::' | sort -r | tail -n +"$((KEEP_RELEASES + 1))" |
+    while IFS= read -r old; do
+        [ "$(readlink -f "$old")" = "$current" ] || rm -rf -- "$old"
+    done
 echo "installed release $release"
 

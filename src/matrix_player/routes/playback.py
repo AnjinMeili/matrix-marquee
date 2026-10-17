@@ -1,8 +1,10 @@
 """Playback state control endpoints."""
 
+from io import BytesIO
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 
 from ..database import Database
 from ..playback import PlaybackController, PlaybackError
@@ -36,7 +38,7 @@ def start(
     if not row["is_enabled"]:
         raise HTTPException(status_code=409, detail="playlist is disabled")
     try:
-        state = playback.start(command.playlist_id)
+        state = playback.start(command.playlist_id, from_start=command.from_start)
     except PlaybackError as error:
         logger.warning(
             "playback_start_failed",
@@ -47,6 +49,18 @@ def start(
         ) from error
     logger.info("playback_started", extra={"playlist_id": command.playlist_id})
     return state
+
+
+@router.get("/frame")
+def current_frame(request: Request) -> Response:
+    """PNG of what the panel is showing right now, for the live mirror in the UI."""
+    matrix = request.app.state.matrix
+    frame = getattr(matrix, "frame", None) if matrix is not None else None
+    if frame is None:
+        raise HTTPException(status_code=503, detail="matrix unavailable")
+    output = BytesIO()
+    frame.save(output, format="PNG")
+    return Response(output.getvalue(), media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 @router.post("/send", response_model=PlaybackState)

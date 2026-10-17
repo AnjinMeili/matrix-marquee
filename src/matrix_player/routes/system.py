@@ -3,11 +3,14 @@
 from datetime import datetime, timezone
 import os
 from pathlib import Path
+import re
 import shutil
 import socket
+import subprocess
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 
 from ..config import Settings
 from ..database import Database
@@ -106,3 +109,39 @@ def diagnostics_endpoint(
         "process": {"pid": os.getpid(), "load_average": load_average},
         "temperature_c": _temperature(),
     }
+
+
+LOG_UNITS = ("protest.service", "protest-health.service", "hostapd.service")
+REDACTIONS = (
+    (re.compile(r"(?i)(pass(word|phrase)?|token|secret|authorization)[=: ]+\S+"), r"\1=[REDACTED]"),
+    (re.compile(r"(?i)\b(filename|path|text|content|body)\"?[=: ]+\"?[^\", ]+"), r"\1=[REDACTED]"),
+)
+
+
+@router.get("/diagnostics/logs")
+def diagnostics_logs() -> PlainTextResponse:
+    """Recent service logs with credentials and content redacted.
+
+    DNS query logs are left out because they reveal what visitors browse.
+    """
+    journalctl = shutil.which("journalctl")
+    if journalctl is None:
+        raise HTTPException(status_code=503, detail="system journal unavailable")
+    command = [journalctl, "--no-pager", "--since", "24 hours ago", "-n", "5000", "-o", "short-iso"]
+    for unit in LOG_UNITS:
+        command += ["-u", unit]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise HTTPException(status_code=503, detail="could not read the system journal") from error
+    text = result.stdout
+    for pattern, replacement in REDACTIONS:
+        text = pattern.sub(replacement, text)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return PlainTextResponse(
+        text,
+        headers={
+            "Content-Disposition": f'attachment; filename="protest-logs-{stamp}.txt"',
+            "Cache-Control": "no-store",
+        },
+    )

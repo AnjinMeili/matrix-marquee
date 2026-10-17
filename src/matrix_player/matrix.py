@@ -31,6 +31,11 @@ class MatrixAdapter(Protocol):
     def size(self) -> Tuple[int, int]:
         ...
 
+    @property
+    def frame(self) -> Image.Image:
+        """Copy of the image currently on the panel."""
+        ...
+
     def show(self, image: Image.Image) -> None:
         ...
 
@@ -117,6 +122,9 @@ class RGBMatrixAdapter:
         self.config = selected
         self._matrix = RGBMatrix(options=options)
         self._size = (self._matrix.width, self._matrix.height)
+        # Draw off-screen and swap on vsync so motion never tears mid-refresh.
+        self._canvas = self._matrix.CreateFrameCanvas()
+        self._frame = Image.new("RGB", self._size)
         self._lock = threading.RLock()
 
     @property
@@ -124,17 +132,27 @@ class RGBMatrixAdapter:
         """Canvas size reported by the driver once pixel mappers are applied."""
         return self._size
 
+    @property
+    def frame(self) -> Image.Image:
+        with self._lock:
+            return self._frame.copy()
+
     def show(self, image: Image.Image) -> None:
         if image.size != self.size:
             raise ValueError("frame size {} does not match matrix {}".format(image.size, self.size))
+        frame = image.convert("RGB")
         with self._lock:
             # The Rotate:90 pixel mapper already presents the driver's 64x96
             # framebuffer as a 96x64 canvas, so frames are sent through as-is.
-            self._matrix.SetImage(image.convert("RGB"))
+            self._canvas.SetImage(frame)
+            self._canvas = self._matrix.SwapOnVSync(self._canvas)
+            self._frame = frame
 
     def blank(self) -> None:
         with self._lock:
-            self._matrix.Clear()
+            self._canvas.Clear()
+            self._canvas = self._matrix.SwapOnVSync(self._canvas)
+            self._frame = Image.new("RGB", self._size)
 
     def close(self) -> None:
         self.blank()

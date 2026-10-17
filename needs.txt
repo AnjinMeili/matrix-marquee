@@ -1,0 +1,50 @@
+Playlists need to ve editable on device.  This means add
+delete and reorder.  Playlists should include transition effect,
+time to display, or number of repeats if animated.
+
+Playlists should resart where left off, they should have options to 
+play random, shuffle, or to the end.
+
+Text editor should provide font choices, bold, italic, color changes.
+Goal is to build a sign for protesting.  
+The display needs to be impactful, big bold colorful and attention
+getting.  
+
+Users will not be computer geeks, simple easy to use, yet feature
+rich.  Overlay text on an image, etc.  Transition effects.  Movement,
+pulsing, comic book like impact.
+
+
+When dealing with digital signage, menu boards, or event displays, the right text transition can drastically change how people retain information. Creating an impactful text transition requires balancing eye-catching movement with high readability, ensuring your sign doesn't turn into a jarring distraction.
+Here are the most effective ways to design and execute text transitions on digital signs:
+
+1. Kinetic Typography & Positional Shifts
+
+Instead of fading letters simultaneously, use physical weight, momentum, and asymmetrical timing to draw eyes directly to changing information.
+• The Overshoot Swing: Animate text as if it has physical weight, dropping or swinging into the frame from an edge, overshooting its final resting spot slightly, and settling into place.
+• Sequential / Staggered Slide-In: Move letters or words into the frame in a tight sequence, rather than all at once. Spacing out each letter by 30–60 milliseconds creates a highly polished, rhythmic movement.
+• The Tracked Matte / Frame Reveal: Mask your text so that it appears to rise out of a thin line or slide out from behind a specific physical design element on the sign.
+
+2. Illumination & Texture Morphing
+
+For nightlife, retail, or high-end branding signs, use texture changes and light simulations to blend one thought into the next.
+• The Neon Flicker & Glow: Perfect for LED-style digital signage. The old message subtly wiggles and dims its opacity like an authentic, failing fluorescent sign before snapping into full brightness with the new text.
+• High-Contrast Glitch / Dissolve: Transition from one piece of text to another by using a quick, localized digital glitch or distortion. Restricting the threshold so the line stays sharp creates a highly modern, tech-focused morphing effect.
+• Linear Wipe with Soft Feathering: Instead of a generic fade, pass a smooth, linear wipe horizontally or vertically across the sign with a high feather value (such as 1,000). It gives the impression of a wave of light cleanly wiping away the old message.
+
+3. Spatial Distortion (Bending Reality)
+
+If you want to maximize dynamic engagement on massive screens, treat the text as an interactive object.
+• The Text Globe / Fish-Eye Wrap: Utilize effects that simulate three-dimensional depth. Scale text horizontally across the sign, wrapping it around an invisible sphere or using a subtle fish-eye bend as it loops or transitions outward.
+• Typewriter Reveal: Classic but highly effective for informational updates. Revealing text character-by-character keeps a viewer anchored to the sign, anticipating what the completed sentence will say.
+
+Best Practices for Digital Signage Transitions
+
+To make sure your transitions look professional, ensure your design process keeps these fundamentals in mind:
+
+Transition Style	Best Used For	Why it Works
+Asymmetric Easing	Menu boards, schedules	An ease-out on entry and a quick ease-in on exit keeps text from looking rigid.
+Motion Blur	Promotional ads, event screens	Adding subtle blur on fast reveals makes the digital transition feel more natural to the human eye.
+High Contrast Background Masking	Crowded, outdoor screens	Duplicating the text to increase stroke thickness or using dark geometric backings ensures text pops during movement.
+
+

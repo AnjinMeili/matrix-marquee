@@ -22,6 +22,7 @@ from .playback import (
 )
 from .routes import captive, media, playback, playlists, system, text_panels
 from .storage import MediaStorage
+from .transcode import VideoProxyWorker
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -72,6 +73,13 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configured.ensure_directories()
         app.state.database.initialize()
+        app.state.proxies.start()
+        app.state.proxies.submit_missing(
+            row["filename"]
+            for row in app.state.database.fetch_all(
+                "SELECT filename FROM media WHERE media_type = 'video' ORDER BY id DESC"
+            )
+        )
         if playback_controller is None:
             try:
                 adapter = matrix_adapter or _create_matrix(configured)
@@ -117,6 +125,7 @@ def create_app(
             )
             yield
         finally:
+            app.state.proxies.close()
             try:
                 app.state.playback.close()
             except Exception:
@@ -135,6 +144,7 @@ def create_app(
     app.state.settings = configured
     app.state.database = Database(configured.database_path)
     app.state.storage = MediaStorage(configured)
+    app.state.proxies = VideoProxyWorker(app.state.storage)
     app.state.playback = playback_controller
     app.state.matrix = matrix_adapter
     app.state.matrix_connected = matrix_adapter is not None

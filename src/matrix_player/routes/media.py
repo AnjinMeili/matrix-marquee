@@ -1,16 +1,18 @@
 """Media library endpoints."""
 
 import logging
+from pathlib import Path
 import sqlite3
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 
 from ..database import Database
 from ..models import MediaType
 from ..schemas import Media
-from ..storage import MediaStorage
+from ..storage import MediaStorage, StorageFullError
 from .dependencies import get_database, get_storage
 
 
@@ -18,8 +20,16 @@ router = APIRouter(prefix="/api/media", tags=["media"])
 logger = logging.getLogger(__name__)
 
 
+def _with_status(row: object, request: Request) -> Media:
+    media = Media.model_validate(dict(row))
+    if media.media_type == MediaType.VIDEO:
+        media.preparing = request.app.state.proxies.is_pending(media.filename)
+    return media
+
+
 @router.get("", response_model=List[Media])
 def list_media(
+    request: Request,
     media_type: Optional[MediaType] = Query(default=None, alias="type"),
     query: Optional[str] = Query(default=None, max_length=200),
     database: Database = Depends(get_database),
@@ -35,17 +45,21 @@ def list_media(
         parameters.append(f"%{escaped}%")
     where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = database.fetch_all(f"SELECT * FROM media{where} ORDER BY created_at DESC, id DESC", parameters)
-    return [Media.model_validate(dict(row)) for row in rows]
+    return [_with_status(row, request) for row in rows]
 
 
 @router.post("", response_model=Media, status_code=status.HTTP_201_CREATED)
 async def upload_media(
+    request: Request,
     file: UploadFile = File(...),
     database: Database = Depends(get_database),
     storage: MediaStorage = Depends(get_storage),
 ) -> Media:
     try:
         stored = await storage.save(file)
+    except StorageFullError as error:
+        logger.warning("media_upload_rejected", extra={"reason": str(error)})
+        raise HTTPException(status_code=507, detail=str(error)) from error
     except ValueError as error:
         logger.warning("media_upload_rejected", extra={"reason": str(error)})
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -66,7 +80,9 @@ async def upload_media(
     except sqlite3.IntegrityError as error:
         raise HTTPException(status_code=409, detail="media already exists") from error
     logger.info("media_uploaded", extra={"media_id": row["id"], "size_bytes": stored.file_size_bytes})
-    return Media.model_validate(dict(row))
+    if stored.media_type == MediaType.VIDEO:
+        request.app.state.proxies.submit(stored.filename)
+    return _with_status(row, request)
 
 
 def _get_media(media_id: int, database: Database) -> Media:
@@ -95,12 +111,24 @@ def get_media_content(
 
 
 @router.get("/{media_id}/thumbnail", response_class=FileResponse)
-def get_thumbnail(
+async def get_thumbnail(
     media_id: int,
     database: Database = Depends(get_database),
     storage: MediaStorage = Depends(get_storage),
 ) -> FileResponse:
     media = _get_media(media_id, database)
+    if not media.thumbnail_path and media.media_type == MediaType.VIDEO:
+        # Videos uploaded before thumbnailing existed get one on first view.
+        path = storage.media_path(media.filename)
+        thumbnail = await run_in_threadpool(
+            storage.video_thumbnail, path, Path(media.filename).stem, media.duration_ms
+        ) if path.is_file() else None
+        if thumbnail:
+            with database.transaction() as connection:
+                connection.execute(
+                    "UPDATE media SET thumbnail_path = ? WHERE id = ?", (thumbnail, media_id)
+                )
+            media = media.model_copy(update={"thumbnail_path": thumbnail})
     if not media.thumbnail_path:
         raise HTTPException(status_code=404, detail="thumbnail unavailable")
     path = storage.thumbnail_path(media.thumbnail_path)
@@ -120,7 +148,9 @@ def delete_media(
         with database.transaction() as connection:
             connection.execute("DELETE FROM media WHERE id = ?", (media_id,))
     except sqlite3.IntegrityError as error:
-        raise HTTPException(status_code=409, detail="media is used by a playlist") from error
+        raise HTTPException(
+            status_code=409, detail="media is used by a playlist or as a text background"
+        ) from error
     storage.delete(media.filename, media.thumbnail_path)
     logger.info("media_deleted", extra={"media_id": media_id})
 

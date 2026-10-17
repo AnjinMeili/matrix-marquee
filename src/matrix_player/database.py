@@ -69,6 +69,25 @@ CREATE TABLE IF NOT EXISTS playlist_items (
 CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist ON playlist_items(playlist_id, position);
 """
 
+# Additive column migrations, applied in order to databases created by older
+# releases. SQLite only allows ADD COLUMN, so every entry must have a default.
+COLUMN_MIGRATIONS = (
+    ("playlists", "play_mode", "TEXT NOT NULL DEFAULT 'loop'"),
+    ("playlists", "resume_position", "INTEGER NOT NULL DEFAULT 0"),
+    ("playlist_items", "play_by", "TEXT NOT NULL DEFAULT 'time'"),
+    ("text_panels", "effect", "TEXT NOT NULL DEFAULT 'none'"),
+    ("text_panels", "outline", "INTEGER NOT NULL DEFAULT 1"),
+    ("text_panels", "outline_color", "TEXT NOT NULL DEFAULT '#000000'"),
+    ("text_panels", "accent_color", "TEXT NOT NULL DEFAULT '#ffd400'"),
+    ("text_panels", "background_color", "TEXT NOT NULL DEFAULT '#000000'"),
+    ("text_panels", "motion_speed", "TEXT NOT NULL DEFAULT 'normal'"),
+    (
+        "text_panels",
+        "background_media_id",
+        "INTEGER DEFAULT NULL REFERENCES media(id) ON DELETE RESTRICT",
+    ),
+)
+
 
 class Database:
     def __init__(self, path: Path):
@@ -85,6 +104,10 @@ class Database:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as connection:
             connection.executescript(SCHEMA)
+            for table, column, definition in COLUMN_MIGRATIONS:
+                existing = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+                if column not in existing:
+                    connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection, None, None]:

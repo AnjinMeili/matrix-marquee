@@ -22,6 +22,24 @@ class TransitionType(str, Enum):
     SLIDE_UP = "slide_up"
     SLIDE_DOWN = "slide_down"
     ROTATE = "rotate"
+    FADE_OUT = "fade_out"
+    ZOOM = "zoom"
+    PIXEL_DISSOLVE = "pixel_dissolve"
+    FLASH = "flash"
+    IMPACT = "impact"
+    MORPH = "morph"
+
+
+class PlayMode(str, Enum):
+    LOOP = "loop"
+    SHUFFLE = "shuffle"
+    RANDOM = "random"
+    ONCE = "once"
+
+
+class PlayBy(str, Enum):
+    TIME = "time"
+    REPEATS = "repeats"
 
 
 class FitMode(str, Enum):

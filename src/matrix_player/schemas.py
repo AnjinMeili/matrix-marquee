@@ -5,7 +5,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
-from .models import FitMode, ItemType, MediaType, PlaybackStatus, TransitionType
+from .models import FitMode, ItemType, MediaType, PlaybackStatus, PlayBy, PlayMode, TransitionType
+from .rendering.text import FONT_ALIASES, FONTS
 
 
 class ApiModel(BaseModel):
@@ -24,22 +25,43 @@ class Media(ApiModel):
     frame_rate: Optional[float] = None
     file_size_bytes: int
     thumbnail_path: Optional[str] = None
+    preparing: bool = False  # video still being converted for the sign
     created_at: datetime
     updated_at: datetime
 
 
-class TextPanelBase(ApiModel):
-    name: str = Field(min_length=1, max_length=120)
+FONT_PATTERN = "^({})$".format("|".join(list(FONTS) + list(FONT_ALIASES)))
+HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
+
+
+class TextStyleFields(ApiModel):
     content: str = Field(max_length=2000)
-    font_family: str = Field(default="default", max_length=100)
-    font_size: int = Field(default=12, ge=4, le=128)
+    font_family: str = Field(default="impact", pattern=FONT_PATTERN)
+    font_size: int = Field(default=0, ge=0, le=128, description="0 fills the panel")
     bold: bool = False
     italic: bool = False
     alignment: str = Field(default="center", pattern="^(left|center|right)$")
-    color_mode: str = Field(default="solid", pattern="^(solid|rainbow|plasma)$")
-    color_value: str = Field(default="#ffffff", pattern=r"^#[0-9a-fA-F]{6}$")
-    border_style: str = Field(default="none", pattern="^(none|solid|dashed|double)$")
-    border_color: str = Field(default="#ffffff", pattern=r"^#[0-9a-fA-F]{6}$")
+    color_mode: str = Field(default="solid", pattern="^(solid|rainbow|plasma|cycle|fire)$")
+    color_value: str = Field(default="#ffffff", pattern=HEX_COLOR)
+    outline: bool = True
+    outline_color: str = Field(default="#000000", pattern=HEX_COLOR)
+    border_style: str = Field(
+        default="none", pattern="^(none|solid|dashed|double|marquee|rainbow)$"
+    )
+    border_color: str = Field(default="#ffffff", pattern=HEX_COLOR)
+    effect: str = Field(default="none", pattern="^(none|scroll|scroll_right|pulse|shake|flash|pow|zoom)$")
+    accent_color: str = Field(default="#ffd400", pattern=HEX_COLOR)
+    background_color: str = Field(default="#000000", pattern=HEX_COLOR)
+    motion_speed: str = Field(default="normal", pattern="^(slow|normal|fast)$")
+    background_media_id: Optional[int] = Field(default=None, ge=1)
+
+
+class TextPanelBase(TextStyleFields):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class TextPanelPreview(TextStyleFields):
+    """Unsaved editor state rendered for the live preview."""
 
 
 class TextPanelCreate(TextPanelBase):
@@ -63,6 +85,7 @@ class PlaylistItemBase(ApiModel):
     text_panel_id: Optional[int] = None
     duration_ms: int = Field(default=5000, ge=100, le=86_400_000)
     repeat_count: int = Field(default=1, ge=1, le=10000)
+    play_by: PlayBy = PlayBy.TIME
     transition_type: TransitionType = TransitionType.NONE
     transition_duration_ms: int = Field(default=500, ge=0, le=60_000)
     fit_mode: FitMode = FitMode.FIT
@@ -96,6 +119,7 @@ class PlaylistBase(ApiModel):
     description: str = Field(default="", max_length=1000)
     is_default: bool = False
     is_enabled: bool = True
+    play_mode: PlayMode = PlayMode.LOOP
 
 
 class PlaylistCreate(PlaylistBase):
@@ -108,6 +132,7 @@ class PlaylistUpdate(PlaylistBase):
 
 class Playlist(PlaylistBase):
     id: int
+    resume_position: int = 0
     created_at: datetime
     updated_at: datetime
     items: List[PlaylistItem] = Field(default_factory=list)
@@ -115,6 +140,7 @@ class Playlist(PlaylistBase):
 
 class PlaybackCommand(ApiModel):
     playlist_id: Optional[int] = None
+    from_start: bool = False
 
 
 class SendCommand(ApiModel):
@@ -131,6 +157,10 @@ class PlaybackState(ApiModel):
     source_type: Optional[str] = None
     source_label: Optional[str] = None
     resume_playlist_id: Optional[int] = None
+    position: Optional[int] = None
+    item_count: Optional[int] = None
+    play_mode: Optional[PlayMode] = None
     changed_at: datetime
     error: Optional[str] = None
+    warnings: List[str] = Field(default_factory=list)
 

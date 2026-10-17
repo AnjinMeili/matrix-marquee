@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, List, Optional, Sequence, Tuple, Union
 
-from PIL import Image, ImageDraw, ImageFont, ImageSequence
+from PIL import Image, ImageSequence
 
 from .fit import FitMode, fit_image
+from .text import SCROLL_EFFECTS, TextRenderer, TextStyle
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,10 @@ class ImageFrameSource(FrameSource):
 
 
 class GifFrameSource(FrameSource):
+    """Animated GIF frames, fitted once and cached so loops do not re-decode."""
+
+    MAX_CACHED_FRAMES = 600
+
     def __init__(
         self,
         path: Union[str, Path],
@@ -66,102 +71,80 @@ class GifFrameSource(FrameSource):
         self.fit_mode = fit_mode
         self.max_frames = max_frames
         self.default_duration = default_duration
+        self._cache: Optional[List[Frame]] = None
 
     def __iter__(self) -> Iterator[Frame]:
+        if self._cache is not None:
+            yield from self._cache
+            return
+        decoded: Optional[List[Frame]] = []
         with Image.open(self.path) as gif:
             for index, image in enumerate(ImageSequence.Iterator(gif)):
                 if self.max_frames is not None and index >= self.max_frames:
                     break
                 milliseconds = image.info.get("duration", gif.info.get("duration", 0))
-                duration = milliseconds / 1000 if milliseconds else self.default_duration
-                yield Frame(fit_image(image.convert("RGBA"), self.size, self.fit_mode), duration)
+                # Browsers treat sub-20ms GIF delays as 100ms; match them.
+                duration = milliseconds / 1000 if milliseconds and milliseconds >= 20 else self.default_duration
+                frame = Frame(fit_image(image.convert("RGBA"), self.size, self.fit_mode), duration)
+                if decoded is not None:
+                    decoded.append(frame)
+                    if len(decoded) > self.MAX_CACHED_FRAMES:
+                        decoded = None
+                yield frame
+        if decoded:
+            self._cache = decoded
 
-
-def _load_font(font: Optional[Union[str, Path]], size: int) -> ImageFont.ImageFont:
-    if font:
-        return ImageFont.truetype(str(font), size)
-    try:
-        return ImageFont.truetype("DejaVuSans.ttf", size)
-    except OSError:
-        return ImageFont.load_default()
-
-
-def _wrapped_lines(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font: ImageFont.ImageFont,
-    max_width: int,
-) -> List[str]:
-    result: List[str] = []
-    for paragraph in text.splitlines() or [""]:
-        words = paragraph.split()
-        if not words:
-            result.append("")
-            continue
-        line = words[0]
-        for word in words[1:]:
-            candidate = "{} {}".format(line, word)
-            if draw.textbbox((0, 0), candidate, font=font)[2] <= max_width:
-                line = candidate
-            else:
-                result.append(line)
-                line = word
-        result.append(line)
-    return result
+    def close(self) -> None:
+        self._cache = None
 
 
 def render_text(
     text: str,
     size: Tuple[int, int],
-    font: Optional[Union[str, Path]] = None,
-    font_size: int = 12,
-    color: Union[str, Tuple[int, int, int]] = "white",
-    background: Union[str, Tuple[int, int, int]] = "black",
-    align: str = "center",
-    padding: int = 1,
-    border_color: Optional[Union[str, Tuple[int, int, int]]] = None,
-    border_width: int = 0,
+    style: Optional[TextStyle] = None,
+    background: Optional[Image.Image] = None,
+    t: float = 0.0,
 ) -> Image.Image:
-    if align not in {"left", "center", "right"}:
-        raise ValueError("align must be left, center, or right")
-    image = Image.new("RGB", size, background)
-    draw = ImageDraw.Draw(image)
-    selected_font = _load_font(font, font_size)
-    inset = padding + max(0, border_width)
-    lines = _wrapped_lines(draw, text, selected_font, max(1, size[0] - inset * 2))
-    spacing = max(1, font_size // 5)
-    boxes = [draw.textbbox((0, 0), line or " ", font=selected_font) for line in lines]
-    heights = [box[3] - box[1] for box in boxes]
-    total_height = sum(heights) + spacing * max(0, len(lines) - 1)
-    y = max(inset, (size[1] - total_height) // 2)
-    for line, box, line_height in zip(lines, boxes, heights):
-        line_width = box[2] - box[0]
-        if align == "left":
-            x = inset
-        elif align == "right":
-            x = size[0] - inset - line_width
-        else:
-            x = (size[0] - line_width) // 2
-        draw.text((x, y), line, font=selected_font, fill=color)
-        y += line_height + spacing
-    if border_color is not None and border_width > 0:
-        for offset in range(border_width):
-            draw.rectangle(
-                (offset, offset, size[0] - 1 - offset, size[1] - 1 - offset),
-                outline=border_color,
-            )
-    return image
+    """Renders a single text-panel frame at time t."""
+    return TextRenderer(text, size, style, background).frame(t)
 
 
 class TextFrameSource(FrameSource):
-    def __init__(self, text: str, size: Tuple[int, int], duration: float = 1.0, **style: object) -> None:
+    """Text panel frames; animated styles yield frames until the caller stops."""
+
+    def __init__(
+        self,
+        text: str,
+        size: Tuple[int, int],
+        duration: float = 1.0,
+        style: Optional[TextStyle] = None,
+        background: Optional[Image.Image] = None,
+    ) -> None:
         self.text = text
         self.size = size
         self.duration = duration
-        self.style = style
+        self.style = style or TextStyle()
+        self.background = background
+        self._renderer: Optional[TextRenderer] = None
+
+    @property
+    def renderer(self) -> TextRenderer:
+        if self._renderer is None:
+            self._renderer = TextRenderer(self.text, self.size, self.style, self.background)
+        return self._renderer
+
+    @property
+    def cycle_seconds(self) -> float:
+        return self.renderer.cycle_seconds
+
+    @property
+    def min_seconds(self) -> float:
+        """Scrolling text needs one full pass to be readable."""
+        return self.renderer.cycle_seconds if self.style.effect in SCROLL_EFFECTS else 0.0
 
     def __iter__(self) -> Iterator[Frame]:
-        yield Frame(render_text(self.text, self.size, **self.style), self.duration)
+        for image, duration in self.renderer.frames(None if self.renderer.animated else self.duration):
+            yield Frame(image, duration)
 
 
 class VideoFrameSource(FrameSource):
@@ -175,6 +158,7 @@ class VideoFrameSource(FrameSource):
         max_frames: Optional[int] = None,
         ffmpeg: str = "ffmpeg",
         ffprobe: str = "ffprobe",
+        fit_mode: Union[FitMode, str] = FitMode.FIT,
     ) -> None:
         if fps is not None and fps <= 0:
             raise ValueError("fps must be positive")
@@ -186,7 +170,9 @@ class VideoFrameSource(FrameSource):
         self.max_frames = max_frames
         self.ffmpeg = ffmpeg
         self.ffprobe = ffprobe
-        self._process: Optional[subprocess.Popen[bytes]] = None
+        self.fit_mode = FitMode(fit_mode)
+        self._fps: Optional[float] = None
+        self._process: Optional["subprocess.Popen[bytes]"] = None
 
     @staticmethod
     def available(executable: str = "ffmpeg") -> bool:
@@ -195,6 +181,11 @@ class VideoFrameSource(FrameSource):
     def _detected_fps(self) -> float:
         if self.requested_fps is not None:
             return self.requested_fps
+        if self._fps is None:
+            self._fps = self._probe_fps()
+        return self._fps
+
+    def _probe_fps(self) -> float:
         if shutil.which(self.ffprobe):
             command = [
                 self.ffprobe, "-v", "error", "-select_streams", "v:0",
@@ -220,8 +211,7 @@ class VideoFrameSource(FrameSource):
         width, height = self.size
         command = [
             executable, "-v", "error", "-i", str(self.path), "-an",
-            "-vf", "scale={}:{}:force_original_aspect_ratio=decrease,"
-            "pad={}:{}:(ow-iw)/2:(oh-ih)/2:black".format(width, height, width, height),
+            "-vf", self._filter(width, height),
             "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
         ]
         self._process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -238,12 +228,23 @@ class VideoFrameSource(FrameSource):
         finally:
             self.close()
 
+    def _filter(self, width: int, height: int) -> str:
+        if self.fit_mode is FitMode.STRETCH:
+            return "scale={}:{}".format(width, height)
+        if self.fit_mode is FitMode.CROP:
+            return "scale={0}:{1}:force_original_aspect_ratio=increase,crop={0}:{1}".format(width, height)
+        return (
+            "scale={0}:{1}:force_original_aspect_ratio=decrease,"
+            "pad={0}:{1}:(ow-iw)/2:(oh-ih)/2:black".format(width, height)
+        )
+
     def close(self) -> None:
+        # ffmpeg blocked on a full pipe ignores SIGTERM, so stop it outright.
         process, self._process = self._process, None
-        if process is not None and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+        if process is None:
+            return
+        if process.stdout is not None:
+            process.stdout.close()
+        if process.poll() is None:
+            process.kill()
+        process.wait()

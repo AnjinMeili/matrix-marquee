@@ -3,6 +3,7 @@ import random
 from enum import Enum
 from typing import Iterator, Union
 
+import numpy as np
 from PIL import Image
 
 
@@ -22,10 +23,55 @@ class Transition(str, Enum):
     ZOOM = "zoom"
     ZOOM_IN = "zoom_in"
     PIXEL_DISSOLVE = "pixel_dissolve"
+    FLASH = "flash"
+    IMPACT = "impact"
+    MORPH = "morph"
 
 
 def _normalized(image: Image.Image, size: tuple) -> Image.Image:
     return image.convert("RGB").resize(size, Image.Resampling.LANCZOS)
+
+
+def _lit_points(pixels: np.ndarray) -> tuple:
+    """Bright pixels as (x, y, rgb) arrays, ordered left-to-right then top-to-bottom."""
+    luminance = pixels @ np.array([0.299, 0.587, 0.114])
+    threshold = max(24.0, float(np.percentile(luminance, 60)))
+    ys, xs = np.nonzero(luminance > threshold)
+    if xs.size == 0:  # an all-dark frame morphs from or to a single centre point
+        height, width = luminance.shape
+        return np.array([width // 2]), np.array([height // 2]), np.zeros((1, 3))
+    order = np.lexsort((ys, xs))
+    xs, ys = xs[order], ys[order]
+    return xs.astype(np.float64), ys.astype(np.float64), pixels[ys.astype(int), xs.astype(int)].astype(np.float64)
+
+
+def _morph_frames(old: Image.Image, new: Image.Image, frames: int) -> Iterator[Image.Image]:
+    """Pixel morph: the old picture's bright pixels flow into the new picture's shape.
+
+    Bright pixels are paired by rank in reading order, so features travel a short,
+    coherent distance; at 96x64 this is a few thousand points per frame.
+    """
+    old_pixels = np.asarray(old, dtype=np.float64)
+    new_pixels = np.asarray(new, dtype=np.float64)
+    height, width = old_pixels.shape[:2]
+    ox, oy, ocolor = _lit_points(old_pixels)
+    nx, ny, ncolor = _lit_points(new_pixels)
+    count = max(ox.size, nx.size)
+    pick_old = np.linspace(0, ox.size - 1, count).round().astype(int)
+    pick_new = np.linspace(0, nx.size - 1, count).round().astype(int)
+    ox, oy, ocolor = ox[pick_old], oy[pick_old], ocolor[pick_old]
+    nx, ny, ncolor = nx[pick_new], ny[pick_new], ncolor[pick_new]
+    for index in range(1, frames):
+        progress = index / frames
+        eased = progress * progress * (3 - 2 * progress)
+        # Dim the cross-faded backdrop mid-way so the moving pixels read clearly.
+        backdrop = old_pixels * (1 - eased) + new_pixels * eased
+        backdrop *= 1 - 0.75 * math.sin(math.pi * progress)
+        x = np.clip(np.rint(ox + (nx - ox) * eased), 0, width - 1).astype(int)
+        y = np.clip(np.rint(oy + (ny - oy) * eased), 0, height - 1).astype(int)
+        backdrop[y, x] = ocolor + (ncolor - ocolor) * eased
+        yield Image.fromarray(backdrop.clip(0, 255).astype(np.uint8))
+    yield new.copy()
 
 
 def transition_frames(
@@ -126,3 +172,44 @@ def transition_frames(
             for x, y in coordinates[start:stop]:
                 pixels[x, y] = new_pixels[x, y]
             yield canvas.copy() if index < frames else new.copy()
+
+    if kind is Transition.MORPH:
+        yield from _morph_frames(old, new, frames)
+        return
+
+    if kind is Transition.FLASH:
+        # Camera-flash cut: burn to white, then cool down onto the new image.
+        white = Image.new("RGB", size, (255, 255, 255))
+        peak = max(1, frames // 3)
+        for index in range(1, frames + 1):
+            if index <= peak:
+                yield Image.blend(old, white, index / peak)
+            elif index < frames:
+                yield Image.blend(white, new, (index - peak) / (frames - peak))
+            else:
+                yield new.copy()
+        return
+
+    if kind is Transition.IMPACT:
+        # Comic-book slam: new image punches in oversized, flashes, then shakes.
+        rng = random.Random(seed)
+        slam = max(1, frames // 2)
+        for index in range(1, frames + 1):
+            if index < slam:
+                progress = index / slam
+                scale = 2.2 - 1.2 * (1 - (1 - progress) ** 3)
+                width = max(1, round(size[0] * scale))
+                height = max(1, round(size[1] * scale))
+                layer = new.resize((width, height), Image.Resampling.BILINEAR)
+                canvas = Image.blend(old, Image.new("RGB", size), 0.5)
+                canvas.paste(layer, ((size[0] - width) // 2, (size[1] - height) // 2))
+                yield canvas
+            elif index == slam:
+                yield Image.blend(new, Image.new("RGB", size, (255, 255, 255)), 0.6)
+            elif index < frames:
+                canvas = Image.new("RGB", size)
+                canvas.paste(new, (rng.randint(-3, 3), rng.randint(-2, 2)))
+                yield canvas
+            else:
+                yield new.copy()
+        return

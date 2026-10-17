@@ -9,6 +9,7 @@ description = "Offline-first RGB matrix media player"
 requires-python = ">=3.9"
 dependencies = [
   "fastapi>=0.115,<1",
+  "numpy>=1.26,<3",
   "pillow>=10,<13",
   "python-multipart>=0.0.12,<1",
   "uvicorn[standard]>=0.30,<1",

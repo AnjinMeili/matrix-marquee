@@ -51,8 +51,7 @@ def test_health_and_captive_routes(tmp_path: Path) -> None:
             "upload-dialog",
             "playlist-dialog",
             "text-dialog",
-            "add-item-dialog",
-            "add-to-playlist-dialog",
+            "item-dialog",
         ):
             assert f'id="{dialog_id}"' in root.text
         script = client.get("/static/app.js").text
@@ -60,8 +59,8 @@ def test_health_and_captive_routes(tmp_path: Path) -> None:
             "upload-form",
             "playlist-form",
             "text-form",
-            "add-item-form",
-            "add-to-playlist-form",
+            "item-form",
+            "quick-form",
         ):
             assert f'"{form_id}"' in script
         assert client.get("/static/app.css").headers["content-type"].startswith("text/css")

@@ -98,7 +98,7 @@ h3 { margin-bottom: 4px; font-size: 15px; }
 .wide { grid-column: 1 / -1; }
 
 .matrix-frame { padding: clamp(10px, 4vw, 25px); background: #05080d; border-radius: 11px; }
-.matrix-preview { position: relative; display: grid; place-items: center; aspect-ratio: 2 / 1; overflow: hidden; border: 6px solid #263447; border-radius: 5px; background: radial-gradient(circle at 22% 30%, #fc4c88 0, transparent 24%), radial-gradient(circle at 75% 70%, #30cfa0 0, transparent 25%), linear-gradient(135deg, #271551, #094a72); text-align: center; box-shadow: inset 0 0 30px rgba(0,0,0,.4), 0 0 22px rgba(85,221,245,.13); }
+.matrix-preview { position: relative; display: grid; place-items: center; aspect-ratio: 3 / 2; overflow: hidden; border: 6px solid #263447; border-radius: 5px; background: radial-gradient(circle at 22% 30%, #fc4c88 0, transparent 24%), radial-gradient(circle at 75% 70%, #30cfa0 0, transparent 25%), linear-gradient(135deg, #271551, #094a72); text-align: center; box-shadow: inset 0 0 30px rgba(0,0,0,.4), 0 0 22px rgba(85,221,245,.13); }
 .matrix-preview::after { position: absolute; inset: 0; content: ""; pointer-events: none; background-image: radial-gradient(rgba(255,255,255,.23) .7px, transparent .8px); background-size: 5px 5px; mix-blend-mode: overlay; }
 .preview-copy { position: relative; z-index: 1; padding: 20px; }
 .preview-copy strong { display: block; font-size: clamp(22px, 7vw, 52px); letter-spacing: .08em; text-shadow: 0 0 16px white; }
@@ -204,7 +204,55 @@ dialog form { display: grid; gap: 15px; padding: 19px; }
 .drop-icon { font-size: 30px; color: var(--accent); }
 .file-selection { max-height: 100px; overflow: auto; font-size: 13px; }
 
+/* Live mirror and sign previews: crisp LED pixels with a dot-grid overlay. */
+#live-frame, .sign-preview img, .thumb img { image-rendering: pixelated; }
+#live-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.sign-preview { position: relative; overflow: hidden; aspect-ratio: 3 / 2; background: #000; border: 5px solid #263447; border-radius: 6px; }
+.sign-preview img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.sign-preview::after { position: absolute; inset: 0; content: ""; pointer-events: none; background-image: radial-gradient(transparent 55%, rgba(0,0,0,.55) 75%); background-size: calc(100% / 96) calc(100% / 64); }
+.sign-preview-wrap { position: sticky; top: -19px; z-index: 2; margin: 0 -19px; padding: 12px 19px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.sign-preview-wrap .sign-preview { max-width: 420px; margin: 0 auto; }
+.sign-preview-wrap .form-help { margin-top: 6px; text-align: center; }
+.panel-copy { margin: 14px 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
+#text-detail .sign-preview { max-width: 520px; }
+.field-label { margin: 0 0 6px; color: var(--muted); font-size: 13px; font-weight: 650; }
+.preset-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.preset { min-height: 40px; padding: 8px 13px; color: var(--text); background: var(--surface-soft); border: 1px solid var(--line); border-radius: 999px; font-weight: 750; }
+.preset:hover { border-color: var(--line-bright); }
+.preset.active { color: var(--accent-dark); background: var(--accent); border-color: var(--accent); }
+.toggle-row { display: flex; flex-wrap: wrap; gap: 18px; }
+.quick-form { display: grid; gap: 12px; }
+.warning-list { margin: 0 0 12px; padding: 10px 12px; color: #211b03; background: var(--warning); border-radius: 10px; font-size: 13px; font-weight: 700; }
+.warning-list p { margin: 0; }
+.wide-dialog { width: min(720px, calc(100% - 24px)); }
+.timing { display: grid; gap: 8px; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.timing legend { padding: 0 6px; color: var(--muted); font-size: 13px; font-weight: 650; }
+.radio { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text); font-size: 15px; }
+.radio input[type="radio"] { width: 21px; min-height: 21px; accent-color: var(--accent); }
+.inline-number { width: 84px; min-height: 40px; }
+.thumb { display: grid; flex: 0 0 auto; place-items: center; width: 72px; aspect-ratio: 3 / 2; overflow: hidden; color: var(--muted); background: #000; border-radius: 5px; font-weight: 800; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.media-thumb .thumb { width: 100%; height: 100%; border-radius: 0; font-size: 28px; }
+.selection-item.with-thumb { display: flex; align-items: center; gap: 10px; }
+.selection-text { min-width: 0; }
+.playlist-list { display: grid; gap: 8px; margin-top: 16px; }
+.playlist-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 10px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 10px; }
+.playlist-row .item-main strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.playlist-row .item-main p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.playlist-row .item-controls { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 2px; }
+.icon-button.danger { color: var(--danger); }
+.icon-button:disabled { opacity: .35; cursor: not-allowed; }
+.upload-list { display: grid; gap: 8px; max-height: 220px; overflow: auto; font-size: 13px; }
+.upload-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; }
+.upload-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.upload-row progress { grid-column: 1 / -1; width: 100%; height: 8px; accent-color: var(--accent); }
+.upload-row .upload-status { grid-row: 1; grid-column: 2; }
+.upload-row.done .upload-status { color: var(--success); }
+.upload-row.failed .upload-status { color: var(--danger); }
+
 @media (min-width: 600px) {
+  .playlist-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .playlist-row .item-controls { grid-column: auto; }
   main { padding: 30px 26px 70px; }
   .page-header { flex-direction: row; align-items: center; justify-content: space-between; }
   .dashboard-grid, .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
