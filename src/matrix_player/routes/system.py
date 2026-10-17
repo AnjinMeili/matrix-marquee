@@ -177,6 +177,13 @@ async def download_backup(
     )
 
 
+@router.get("/usage")
+def usage_totals(request: Request, days: int = 30) -> list:
+    """How each message and picture or video has been used: the raw signal for
+    ratings inferred from use."""
+    return request.app.state.usage.totals(days=max(1, min(days, 400)))
+
+
 @router.get("/health")
 def health_details(request: Request) -> dict:
     """Heat and power: the current state, a 24-hour record, and recent events."""

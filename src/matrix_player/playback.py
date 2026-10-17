@@ -17,6 +17,8 @@ from typing import (
     Mapping,
     Optional,
     Protocol,
+    Tuple,
+    TYPE_CHECKING,
     Union,
 )
 
@@ -39,6 +41,9 @@ from .rendering import (
 )
 from .schemas import PlaybackState
 from .storage import MediaStorage
+
+if TYPE_CHECKING:
+    from .usage import UsageRecorder
 
 logger = logging.getLogger(__name__)
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}
@@ -205,6 +210,7 @@ class PlaybackItem:
     item_id: Optional[int] = None
     play_by: str = PlayBy.TIME.value
     label: Optional[str] = None
+    usage: Optional[Tuple[str, int]] = None  # ("media" | "text_panel", id) for usage counts
 
     def __post_init__(self) -> None:
         if self.duration is not None and self.duration < 0:
@@ -216,6 +222,7 @@ class PlaybackItem:
 
 
 ItemCallback = Callable[[int, PlaybackItem], None]
+PlayedCallback = Callable[[PlaybackItem, float], None]
 
 
 class PlaybackService:
@@ -282,6 +289,7 @@ class PlaybackService:
         start_index: int = 0,
         on_item: Optional[ItemCallback] = None,
         on_finished: Optional[Callable[[], None]] = None,
+        on_played: Optional[PlayedCallback] = None,
     ) -> None:
         normalized = [
             item if isinstance(item, PlaybackItem) else PlaybackItem(item)
@@ -302,7 +310,7 @@ class PlaybackService:
             self._state = RendererState.STARTING
             self._thread = threading.Thread(
                 target=self._run,
-                args=(normalized, selected, start_index, self._stop_event, on_item, on_finished),
+                args=(normalized, selected, start_index, self._stop_event, on_item, on_finished, on_played),
                 name="matrix-playback",
                 daemon=True,
             )
@@ -531,6 +539,7 @@ class PlaybackService:
         stop_event: threading.Event,
         on_item: Optional[ItemCallback],
         on_finished: Optional[Callable[[], None]],
+        on_played: Optional[PlayedCallback] = None,
     ) -> None:
         self._local.stop = stop_event
         try:
@@ -552,10 +561,16 @@ class PlaybackService:
                     except Exception:
                         logger.exception("playback_item_callback_failed")
                 shown_before = self._frames_shown
+                began = self._now()
                 try:
                     previous = self._play_item(item, previous)
                     with self._condition:
                         self._warnings.pop(self._warning_key(item), None)
+                    if on_played is not None and self._frames_shown > shown_before:
+                        try:
+                            on_played(item, self._now() - began)
+                        except Exception:
+                            logger.exception("playback_played_callback_failed")
                 except Exception as error:
                     # One unreadable item must never take the whole sign dark.
                     label = item.label or (f"item {item.item_id}" if item.item_id else "item")
@@ -723,11 +738,16 @@ class DatabasePlaybackController:
     POSITION_SAVE_INTERVAL = 15.0
 
     def __init__(
-        self, service: PlaybackService, database: Database, storage: MediaStorage
+        self,
+        service: PlaybackService,
+        database: Database,
+        storage: MediaStorage,
+        usage: Optional["UsageRecorder"] = None,
     ) -> None:
         self.service = service
         self.database = database
         self.storage = storage
+        self.usage = usage
         self._lock = threading.RLock()
         self._playlist_id: Optional[int] = None
         self._play_mode: Optional[str] = None
@@ -794,6 +814,10 @@ class DatabasePlaybackController:
                     item_id=row["id"],
                     play_by=play_by,
                     label=f"“{label}”" if label else None,
+                    usage=(
+                        ("media", row["media_id"]) if row["item_type"] == ItemType.MEDIA.value
+                        else ("text_panel", row["text_panel_id"])
+                    ),
                 )
             )
         if not items:
@@ -881,8 +905,13 @@ class DatabasePlaybackController:
             start_index=start_index,
             on_item=lambda index, _item: self._item_started(playlist_id, index),
             on_finished=lambda: self._playlist_finished(playlist_id),
+            on_played=self._played,
         )
         return self.state()
+
+    def _played(self, item: PlaybackItem, seconds: float) -> None:
+        if self.usage is not None and item.usage is not None:
+            self.usage.record_play(item.usage[0], item.usage[1], seconds)
 
     def send_media(
         self, media_id: int, fit_mode: str = "fit", duration_ms: Optional[int] = None
@@ -896,7 +925,7 @@ class DatabasePlaybackController:
         source = self._media_builder(row["filename"], duration, fit_mode, row["media_type"])()
         # Stills hold for the duration; animations play whole loops back to back.
         play_by = PlayBy.TIME.value if row["media_type"] == "image" else PlayBy.REPEATS.value
-        self._send(source, duration, "media", row["display_name"], play_by)
+        self._send(source, duration, "media", row["display_name"], play_by, usage=("media", media_id))
         return self.state()
 
     def send_text_panel(
@@ -907,7 +936,7 @@ class DatabasePlaybackController:
             raise PlaybackError("text_panel_not_found", "text panel not found")
         duration = (duration_ms or DEFAULT_SEND_DURATION_MS) / 1000.0
         source = self._text_builder(row, duration)()
-        self._send(source, duration, "text_panel", row["name"], PlayBy.TIME.value)
+        self._send(source, duration, "text_panel", row["name"], PlayBy.TIME.value, usage=("text_panel", panel_id))
         return self.state()
 
     def show_image(self, image: Image.Image, label: str) -> PlaybackState:
@@ -917,9 +946,17 @@ class DatabasePlaybackController:
         return self.state()
 
     def _send(
-        self, source: Source, duration: float, source_type: str, label: str, play_by: str
+        self,
+        source: Source,
+        duration: float,
+        source_type: str,
+        label: str,
+        play_by: str,
+        usage: Optional[Tuple[str, int]] = None,
     ) -> None:
         self._save_position(force=True)
+        if self.usage is not None and usage is not None:
+            self.usage.record_send(*usage)
         with self._lock:
             interrupted = self._playlist_id if self.service.is_running else None
             if interrupted is None and self._source_type in {"media", "text_panel"}:
@@ -932,6 +969,7 @@ class DatabasePlaybackController:
             transition_duration=0.0,
             play_by=play_by,
             label=f"“{label}”",
+            usage=usage,
         )
         with self._lock:
             self._playlist_id = None
@@ -941,7 +979,7 @@ class DatabasePlaybackController:
             self._source_label = label
             self._resume_playlist_id = interrupted
             self._changed_at = datetime.now(timezone.utc)
-        self.service.start([item], mode=PlayMode.LOOP.value)
+        self.service.start([item], mode=PlayMode.LOOP.value, on_played=self._played)
 
     def release(self) -> PlaybackState:
         """Ends a direct send and resumes the playlist it interrupted where it left off."""

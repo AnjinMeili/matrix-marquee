@@ -421,6 +421,7 @@ Built beyond the MVP list: text effects and colour styles, bundled display fonts
 
 Not built yet:
 
+- **A companion app that designs signs with an LLM** (Sign Studio): slogans and full message styles, checked with the sign's own renderer, guided by ratings of existing media and messages (given by users or inferred from use, such as play counts and how many playlists include an item), and delivered as importable design packs. See [docs/companion-designer-plan.md](docs/companion-designer-plan.md).
 - **Counting street sounds** with a USB microphone: car horns, shouting, crowds, sirens, counted on the device without keeping any audio. See [docs/sound-events-plan.md](docs/sound-events-plan.md).
 - **Enclosure and power sensors** on `i2c0` (GPIO 0/1, the only free pins): an SHT31/SHT45 for enclosure temperature and humidity, and INA226/INA228 with an external 50 A shunt on the panels' 5 V feed.
 - **Streaming to WLED panels** over DDP. Deferred; see [docs/wled-output-plan.md](docs/wled-output-plan.md).

@@ -877,3 +877,53 @@ def test_batch_tags_add_and_remove_across_a_selection(tmp_path: Path) -> None:
         many = [f"t{n}" for n in range(19)]
         assert client.post("/api/media/batch-tags", json={"media_ids": [ids[0]], "add": many}).status_code == 422
         assert client.post("/api/media/batch-tags", json={"media_ids": [], "add": ["x"]}).status_code == 422
+
+
+def test_usage_counters_record_how_items_are_used(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    with TestClient(create_app(settings, matrix_adapter=MockMatrixAdapter())) as client:
+        media = client.post("/api/media", files={"file": ("p.png", png_bytes(), "image/png")}).json()
+        loved = add_panel(client, "LOVED")
+        dropped = add_panel(client, "DROPPED")
+        playlist = client.post("/api/playlists", json={"name": "Count"}).json()
+        add_item(client, playlist["id"], item_type="text_panel", text_panel_id=loved["id"], duration_ms=1200)
+        add_item(client, playlist["id"], item_type="media", media_id=media["id"], duration_ms=1200)
+        quick = add_item(client, playlist["id"], item_type="text_panel", text_panel_id=dropped["id"], duration_ms=1200)
+
+        client.delete(f"/api/playlists/{playlist['id']}/items/{quick['id']}")  # tried and dropped
+        client.post("/api/playback/start", json={"playlist_id": playlist["id"]})
+        time.sleep(3.0)  # long enough for both remaining items to play once
+        client.post("/api/playback/send", json={"target_type": "text_panel", "target_id": loved["id"]})
+        client.post("/api/playback/stop")
+        client.put(f"/api/text-panels/{loved['id']}", json={**{k: loved[k] for k in ("name", "content")}, "color_value": "#ff0000"})
+
+        totals = {(row["kind"], row["item_id"]): row for row in client.get("/api/usage").json()}
+        loved_row = totals[("text_panel", loved["id"])]
+        assert loved_row["plays"] >= 1 and loved_row["seconds"] >= 1.0
+        assert loved_row["sends"] == 1 and loved_row["edits"] == 1
+        assert totals[("media", media["id"])]["plays"] >= 1
+        assert totals[("text_panel", dropped["id"])]["quick_removals"] == 1
+
+    # Counts are written to the database and survive a restart.
+    with TestClient(create_app(settings, matrix_adapter=MockMatrixAdapter())) as client:
+        rows = {(row["kind"], row["item_id"]): row for row in client.get("/api/usage").json()}
+        assert rows[("text_panel", loved["id"])]["sends"] == 1
+
+
+def test_usage_removal_long_after_adding_is_not_quick(tmp_path: Path) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from matrix_player.usage import UsageRecorder
+
+    database = Database(tmp_path / "usage.sqlite3")
+    database.initialize()
+    now = datetime(2026, 10, 17, 12, tzinfo=timezone.utc)
+    recorder = UsageRecorder(database, clock=lambda: now)
+    recorder.record_removal("media", 7, (now - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"))
+    recorder.record_removal("media", 8, (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"))
+    recorder.record_removal("media", 9, None)
+    recorder.record_play("media", 7, 0.4)  # a glimpse adds time but not a play
+    rows = {row["item_id"]: row for row in recorder.totals()}
+    assert 8 in rows and rows[8]["quick_removals"] == 1
+    assert rows[7]["quick_removals"] == 0 and rows[7]["plays"] == 0 and rows[7]["seconds"] == 0.4
+    assert 9 not in rows

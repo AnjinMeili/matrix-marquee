@@ -27,6 +27,7 @@ from . import display
 from .routes import captive, display as display_routes, media, playback, playlists, system, text_panels
 from .storage import MediaStorage
 from .transcode import VideoProxyWorker
+from .usage import UsageRecorder
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -100,6 +101,7 @@ def create_app(
         remove_stale_archives(configured)
         start_library_checks(app.state.database, app.state.storage, configured)
         app.state.health.start()
+        app.state.usage.start()
         app.state.proxies.start()
         app.state.proxies.submit_missing(
             row["filename"]
@@ -113,7 +115,7 @@ def create_app(
                 app.state.matrix = adapter
                 adapter.set_correction(display.load(app.state.database))
                 app.state.playback = DatabasePlaybackController(
-                    PlaybackService(adapter), app.state.database, app.state.storage
+                    PlaybackService(adapter), app.state.database, app.state.storage, app.state.usage
                 )
                 app.state.matrix_connected = True
                 app.state.matrix_error = None
@@ -159,6 +161,7 @@ def create_app(
                 app.state.playback.close()
             except Exception:
                 logging.getLogger(__name__).exception("playback_shutdown_failed")
+            app.state.usage.close()
             app.state.matrix_connected = False
             logging.getLogger(__name__).info("application_stopped")
 
@@ -175,6 +178,7 @@ def create_app(
     app.state.storage = MediaStorage(configured)
     app.state.proxies = VideoProxyWorker(app.state.storage)
     app.state.health = HealthMonitor(app.state.database)
+    app.state.usage = UsageRecorder(app.state.database)
     app.state.playback = playback_controller
     app.state.matrix = matrix_adapter
     app.state.matrix_connected = matrix_adapter is not None

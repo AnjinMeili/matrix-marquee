@@ -130,6 +130,15 @@ drawn off-screen and swapped on vsync, so motion does not tear.
   phone's player, a GIF gets an MP4 copy the first time it is opened.
 - Deleting media that a playlist or message background uses is refused.
 
+### Usage counters
+
+The sign keeps daily totals of how each message and picture or video is
+used: plays, seconds on the sign, "Show now" sends, edits, and removals from
+a playlist soon after adding. They are the basis for ratings inferred from
+use (see `docs/companion-designer-plan.md`), are readable at `/api/usage`,
+and are included in full backups. They are gathered in memory and written
+every few minutes, and record nothing about viewers.
+
 ## Wi-Fi AP and captive portal
 
 AP setup is intentionally **not** part of installation. Changing the wrong

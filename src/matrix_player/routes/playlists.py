@@ -176,8 +176,8 @@ def add_item(
         )
         cursor = connection.execute(
             f"""INSERT INTO playlist_items
-                (playlist_id, position, {','.join(ITEM_FIELDS)})
-                VALUES (?, ?, {','.join('?' for _ in ITEM_FIELDS)})""",
+                (playlist_id, position, added_at, {','.join(ITEM_FIELDS)})
+                VALUES (?, ?, CURRENT_TIMESTAMP, {','.join('?' for _ in ITEM_FIELDS)})""",
             (playlist_id, position) + tuple(
                 _db_value(values[field]) for field in ITEM_FIELDS
             ),
@@ -255,9 +255,11 @@ def update_item(
 def delete_item(
     playlist_id: int,
     item_id: int,
+    request: Request,
     database: Database = Depends(get_database),
 ) -> None:
     item = _item(playlist_id, item_id, database)
+    added = database.fetch_one("SELECT added_at FROM playlist_items WHERE id = ?", (item_id,))
     with database.transaction() as connection:
         connection.execute("DELETE FROM playlist_items WHERE id = ?", (item_id,))
         connection.execute(
@@ -265,6 +267,8 @@ def delete_item(
             (playlist_id, item.position),
         )
     logger.info("playlist_item_removed", extra={"playlist_id": playlist_id, "item_id": item_id})
+    kind, target = ("media", item.media_id) if item.media_id else ("text_panel", item.text_panel_id)
+    request.app.state.usage.record_removal(kind, target, added["added_at"] if added else None)
 
 
 @router.post("/{playlist_id}/preview")

@@ -135,7 +135,10 @@ def get_panel(panel_id: int, database: Database = Depends(get_database)) -> Text
 
 @router.put("/{panel_id}", response_model=TextPanel)
 def update_panel(
-    panel_id: int, body: TextPanelUpdate, database: Database = Depends(get_database)
+    panel_id: int,
+    body: TextPanelUpdate,
+    request: Request,
+    database: Database = Depends(get_database),
 ) -> TextPanel:
     _panel(panel_id, database)
     _check_background(body.background_media_id, database)
@@ -150,6 +153,7 @@ def update_panel(
             "SELECT * FROM text_panels WHERE id = ?", (panel_id,)
         ).fetchone()
     logger.info("text_panel_updated", extra={"text_panel_id": panel_id})
+    request.app.state.usage.record_edit("text_panel", panel_id)
     return TextPanel.model_validate(dict(row))
 
 

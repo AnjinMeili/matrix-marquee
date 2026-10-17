@@ -90,6 +90,17 @@ CREATE TABLE IF NOT EXISTS health_events (
     detail TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_health_events_at ON health_events(at);
+CREATE TABLE IF NOT EXISTS usage_daily (
+    day TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK(kind IN ('media','text_panel')),
+    item_id INTEGER NOT NULL,
+    plays INTEGER NOT NULL DEFAULT 0,
+    seconds REAL NOT NULL DEFAULT 0,
+    sends INTEGER NOT NULL DEFAULT 0,
+    edits INTEGER NOT NULL DEFAULT 0,
+    quick_removals INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, kind, item_id)
+);
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -108,6 +119,8 @@ COLUMN_MIGRATIONS = (
     ("text_panels", "accent_color", "TEXT NOT NULL DEFAULT '#ffd400'"),
     ("text_panels", "background_color", "TEXT NOT NULL DEFAULT '#000000'"),
     ("text_panels", "motion_speed", "TEXT NOT NULL DEFAULT 'normal'"),
+    # When an item joined its playlist, to spot items dropped soon after.
+    ("playlist_items", "added_at", "TEXT DEFAULT NULL"),
     (
         "text_panels",
         "background_media_id",
