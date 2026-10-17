@@ -659,6 +659,55 @@ TEXT_COLUMNS = (
 )
 
 
+def build_media_source(
+    storage: MediaStorage,
+    filename: Optional[str],
+    size: tuple,
+    duration: float,
+    fit_mode: str,
+) -> FrameSource:
+    if not filename:
+        raise PlaybackError("media_not_found", "media record is missing")
+    path = storage.media_path(filename)
+    if not path.is_file():
+        raise PlaybackError("media_file_missing", "media file is missing")
+    suffix = path.suffix.lower()
+    if suffix == ".gif":
+        return GifFrameSource(path, size, fit_mode)
+    if suffix in VIDEO_SUFFIXES:
+        return VideoFrameSource(storage.playable_path(filename), size, fit_mode=fit_mode)
+    return ImageFrameSource(path, size, duration, fit_mode)
+
+
+def build_text_source(
+    storage: MediaStorage,
+    values: Mapping[str, object],
+    background_filename: Optional[str],
+    size: tuple,
+    duration: float,
+) -> FrameSource:
+    if values.get("content") is None:
+        raise PlaybackError("text_panel_not_found", "text panel is missing")
+    background = None
+    if background_filename:
+        background = load_background(storage.media_path(background_filename), size)
+        if background is None:
+            logger.warning("text_background_unavailable")
+    return TextFrameSource(
+        str(values["content"]), size, duration,
+        style=style_from_mapping(values), background=background,
+    )
+
+
+def text_query(where: str) -> str:
+    """Selects a text panel's style columns plus its background picture filename."""
+    columns = ", ".join(f"tp.{column}" for column in TEXT_COLUMNS)
+    return f"""SELECT tp.id, tp.name, {columns}, bg.filename AS background_filename
+               FROM text_panels tp
+               LEFT JOIN media bg ON bg.id = tp.background_media_id
+               WHERE {where}"""
+
+
 class DatabasePlaybackController:
     """Loads persisted playlists and controls the matrix render worker."""
 
@@ -689,54 +738,16 @@ class DatabasePlaybackController:
         self, filename: Optional[str], duration: float, fit_mode: str
     ) -> Callable[[], FrameSource]:
         """Defers file checks to play time so one missing file only skips its item."""
-
-        def build() -> FrameSource:
-            if not filename:
-                raise PlaybackError("media_not_found", "media record is missing")
-            path = self.storage.media_path(filename)
-            if not path.is_file():
-                raise PlaybackError("media_file_missing", "media file is missing")
-            suffix = path.suffix.lower()
-            size = self.service.matrix.size
-            if suffix == ".gif":
-                return GifFrameSource(path, size, fit_mode)
-            if suffix in VIDEO_SUFFIXES:
-                return VideoFrameSource(self.storage.playable_path(filename), size, fit_mode=fit_mode)
-            return ImageFrameSource(path, size, duration, fit_mode)
-
-        return build
-
-    def _background(self, filename: Optional[str]) -> Optional[Image.Image]:
-        if not filename:
-            return None
-        background = load_background(self.storage.media_path(filename), self.service.matrix.size)
-        if background is None:
-            logger.warning("text_background_unavailable")
-        return background
+        return lambda: build_media_source(
+            self.storage, filename, self.service.matrix.size, duration, fit_mode
+        )
 
     def _text_builder(self, row: Mapping[str, object], duration: float) -> Callable[[], FrameSource]:
         values = {key: row[key] for key in TEXT_COLUMNS}
         background_filename = row["background_filename"]
-
-        def build() -> FrameSource:
-            if values["content"] is None:
-                raise PlaybackError("text_panel_not_found", "text panel is missing")
-            return TextFrameSource(
-                str(values["content"]),
-                self.service.matrix.size,
-                duration,
-                style=style_from_mapping(values),
-                background=self._background(background_filename),
-            )
-
-        return build
-
-    def _text_query(self, where: str) -> str:
-        columns = ", ".join(f"tp.{column}" for column in TEXT_COLUMNS)
-        return f"""SELECT tp.id, tp.name, {columns}, bg.filename AS background_filename
-                   FROM text_panels tp
-                   LEFT JOIN media bg ON bg.id = tp.background_media_id
-                   WHERE {where}"""
+        return lambda: build_text_source(
+            self.storage, values, background_filename, self.service.matrix.size, duration
+        )
 
     def _items(self, playlist_id: int) -> List[PlaybackItem]:
         columns = ", ".join(f"tp.{column}" for column in TEXT_COLUMNS)
@@ -882,7 +893,7 @@ class DatabasePlaybackController:
     def send_text_panel(
         self, panel_id: int, duration_ms: Optional[int] = None
     ) -> PlaybackState:
-        row = self.database.fetch_one(self._text_query("tp.id = ?"), (panel_id,))
+        row = self.database.fetch_one(text_query("tp.id = ?"), (panel_id,))
         if row is None:
             raise PlaybackError("text_panel_not_found", "text panel not found")
         duration = (duration_ms or DEFAULT_SEND_DURATION_MS) / 1000.0

@@ -175,6 +175,10 @@
   <dialog id="item-dialog">
     <form id="item-form">
       <div class="dialog-header"><div><p class="eyebrow">Playlist item</p><h2 id="item-dialog-title">Add to playlist</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close">×</button></div>
+      <div class="sign-preview-wrap">
+        <div class="sign-preview"><img id="item-preview" alt="Preview of this item on the sign"></div>
+        <p class="form-help" id="item-preview-status">Shows the item before it, then this one coming in.</p>
+      </div>
       <label id="item-playlist-row">Playlist<select name="playlist_id" id="item-playlist"></select></label>
       <div class="form-grid" id="item-content-row">
         <label>What<select name="item_type" id="item-type"><option value="text_panel">A message</option><option value="media">A picture or video</option></select></label>

@@ -4,18 +4,23 @@ import logging
 import sqlite3
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import Response
 
 from ..database import Database
+from ..preview import PreviewRenderer
 from ..schemas import (
     Playlist,
     PlaylistCreate,
     PlaylistItem,
     PlaylistItemCreate,
+    PlaylistItemPreview,
     PlaylistItemUpdate,
     PlaylistUpdate,
 )
-from .dependencies import get_database
+from ..storage import MediaStorage
+from .dependencies import get_database, get_storage
 
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
@@ -278,3 +283,51 @@ def preview_playlist(
         "items": [item.model_dump(mode="json") for item in playlist.items],
     }
 
+
+
+def _renderer(request: Request, database: Database, storage: MediaStorage) -> PreviewRenderer:
+    matrix = request.app.state.matrix
+    settings = request.app.state.settings
+    size = tuple(matrix.size) if matrix is not None else (settings.matrix_width, settings.matrix_height)
+    return PreviewRenderer(database, storage, size)
+
+
+def _animation(data: bytes) -> Response:
+    return Response(data, media_type="image/webp", headers={"Cache-Control": "no-store"})
+
+
+@router.post("/preview-item")
+async def preview_item(
+    body: PlaylistItemPreview,
+    request: Request,
+    database: Database = Depends(get_database),
+    storage: MediaStorage = Depends(get_storage),
+) -> Response:
+    """Shows unsaved item settings: the item before it, the entrance, then the item."""
+    previous = None
+    if body.previous_item_id is not None:
+        row = database.fetch_one(
+            "SELECT * FROM playlist_items WHERE id = ?", (body.previous_item_id,)
+        )
+        previous = dict(row) if row is not None else None
+    item = body.model_dump(mode="json")
+    renderer = _renderer(request, database, storage)
+    return _animation(await run_in_threadpool(renderer.item_preview, item, previous))
+
+
+@router.get("/{playlist_id}/run-through")
+async def run_through(
+    playlist_id: int,
+    request: Request,
+    start: int = Query(default=0, ge=0),
+    count: int = Query(default=8, ge=1, le=12),
+    database: Database = Depends(get_database),
+    storage: MediaStorage = Depends(get_storage),
+) -> Response:
+    """The playlist in order from ``start``, each item shortened, with real entrances."""
+    playlist = _playlist(playlist_id, database)
+    items = [item.model_dump(mode="json") for item in playlist.items[start:start + count]]
+    if not items:
+        raise HTTPException(status_code=404, detail="no items to preview")
+    renderer = _renderer(request, database, storage)
+    return _animation(await run_in_threadpool(renderer.run_through, items))

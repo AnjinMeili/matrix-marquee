@@ -213,6 +213,10 @@ dialog form { display: grid; gap: 15px; padding: 19px; }
 .sign-preview-wrap { position: sticky; top: -19px; z-index: 2; margin: 0 -19px; padding: 12px 19px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .sign-preview-wrap .sign-preview { max-width: 420px; margin: 0 auto; }
 .sign-preview-wrap .form-help { margin-top: 6px; text-align: center; }
+.run-through { display: grid; gap: 6px; margin-top: 16px; padding: 12px; background: #05080d; border-radius: 10px; }
+.run-through .sign-preview { width: 100%; max-width: 480px; margin: 0 auto; }
+.run-through .form-help { margin: 0; text-align: center; }
+.run-through .card-actions { justify-content: center; }
 .panel-copy { margin: 14px 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
 #text-detail .sign-preview { max-width: 520px; }
 .field-label { margin: 0 0 6px; color: var(--muted); font-size: 13px; font-weight: 650; }

@@ -470,12 +470,42 @@
       el("div", { class: "card-actions" },
         el("button", { class: "button primary", text: "▶ Play", disabled: !playlist.items.length, onclick: () => startPlaylist(playlist.id) }),
         el("button", { class: "button", text: "⟲ From the top", disabled: !playlist.items.length, onclick: () => startPlaylist(playlist.id, true) }),
+        el("button", { class: "button", text: "👁 Preview", disabled: !playlist.items.length, onclick: () => openRunThrough(playlist.id, 0) }),
         el("button", { class: "button", text: "＋ Add", onclick: () => openItemDialog({ playlistId: playlist.id }) }),
         el("button", { class: "button", text: "Settings", onclick: () => openPlaylistDialog(playlist) }),
         el("button", { class: "button", text: "Copy", onclick: () => duplicatePlaylist(playlist) }),
         el("button", { class: "text-button danger", text: "Delete", onclick: () => removePlaylist(playlist) })),
+      runThroughPane(playlist),
       el("div", { class: "playlist-list" }, items.length ? items : el("p", { class: "empty", text: "Nothing in this playlist yet. Tap ＋ Add." })));
     if (scroll && window.innerWidth < 900) editor.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const RUN_THROUGH_COUNT = 8;
+
+  function openRunThrough(playlistId, start) {
+    state.runThrough = { playlistId, start };
+    selectPlaylist(playlistId, false);
+  }
+
+  // Re-rendered whenever the playlist changes, so edits show up straight away.
+  function runThroughPane(playlist) {
+    const preview = state.runThrough;
+    if (!preview || preview.playlistId !== playlist.id || !playlist.items.length) return null;
+    const total = playlist.items.length;
+    const start = Math.min(preview.start, Math.max(0, total - 1));
+    const end = Math.min(total, start + RUN_THROUGH_COUNT);
+    const status = el("p", { class: "form-help", text: "Drawing preview…" });
+    const img = el("img", { alt: `Preview of items ${start + 1} to ${end}` });
+    img.onload = () => { status.textContent = `Items ${start + 1}–${end} of ${total}, each shortened, with their real entrances.`; };
+    img.onerror = () => { status.textContent = "Preview unavailable."; };
+    img.src = `/api/playlists/${playlist.id}/run-through?start=${start}&count=${RUN_THROUGH_COUNT}&v=${Date.now()}`;
+    return el("div", { class: "run-through" },
+      el("div", { class: "sign-preview" }, img),
+      status,
+      el("div", { class: "card-actions" },
+        el("button", { class: "button small", text: "◀ Earlier", disabled: start === 0, onclick: () => openRunThrough(playlist.id, Math.max(0, start - RUN_THROUGH_COUNT)) }),
+        el("button", { class: "button small", text: "Later ▶", disabled: end >= total, onclick: () => openRunThrough(playlist.id, start + RUN_THROUGH_COUNT) }),
+        el("button", { class: "button small", text: "Close preview", onclick: () => { state.runThrough = null; selectPlaylist(playlist.id, false); } })));
   }
 
   function itemBody(item, overrides = {}) {
@@ -592,7 +622,9 @@
       form.elements.fit_mode.value = item.fit_mode === "letterbox" ? "fit" : item.fit_mode;
     }
     syncItemFields();
+    $("#item-preview").removeAttribute("src");
     $("#item-dialog").showModal();
+    renderItemPreview();
   }
 
   function populateItemContent(selected) {
@@ -622,23 +654,75 @@
     $("#item-fit-row").hidden = type !== "media";
   }
 
-  async function saveItem(form) {
+  function itemFormBody(form) {
     const context = state.itemContext;
     const { type, id } = selectedItemTarget();
-    if (!id) throw new Error("Choose what to add");
     const fields = form.elements;
     const playlistId = context.targetType ? Number(fields.playlist_id.value) : context.playlistId;
     const body = {
       item_type: type,
       media_id: type === "media" ? id : null,
       text_panel_id: type === "text_panel" ? id : null,
-      duration_ms: Math.round(Number(fields.duration.value) * 1000),
-      repeat_count: Number(fields.repeats.value) || 1,
+      duration_ms: Math.max(100, Math.round(Number(fields.duration.value) * 1000) || 6000),
+      repeat_count: Math.max(1, Number(fields.repeats.value) || 1),
       play_by: fields.play_by.value,
       transition_type: fields.transition.value,
       transition_duration_ms: Number(fields.transition_duration.value),
       fit_mode: fields.fit_mode.value
     };
+    return { playlistId, id, body };
+  }
+
+  // The item that plays just before this one, so the preview shows its real entrance.
+  function previousItemId(playlistId) {
+    const playlist = state.playlists.find((entry) => entry.id === playlistId);
+    if (!playlist || !playlist.items.length) return null;
+    const editing = state.itemContext?.item;
+    if (!editing) return playlist.items[playlist.items.length - 1].id;
+    const others = playlist.items.length;
+    if (others < 2) return null;
+    const index = playlist.items.findIndex((entry) => entry.id === editing.id);
+    return playlist.items[(index - 1 + others) % others].id;
+  }
+
+  let itemPreviewTimer = null;
+  let itemPreviewSequence = 0;
+  let itemPreviewUrl = null;
+  function scheduleItemPreview() {
+    clearTimeout(itemPreviewTimer);
+    itemPreviewTimer = setTimeout(renderItemPreview, 400);
+  }
+
+  async function renderItemPreview() {
+    const sequence = ++itemPreviewSequence;
+    const status = $("#item-preview-status");
+    const { playlistId, id, body } = itemFormBody($("#item-form"));
+    if (!id) { status.textContent = "Choose something to preview."; return; }
+    status.textContent = "Drawing preview…";
+    try {
+      const response = await fetch("/api/playlists/preview-item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, previous_item_id: previousItemId(playlistId) })
+      });
+      if (!response.ok) throw new Error("Preview unavailable");
+      const blob = await response.blob();
+      if (sequence !== itemPreviewSequence) return;
+      if (itemPreviewUrl) URL.revokeObjectURL(itemPreviewUrl);
+      itemPreviewUrl = URL.createObjectURL(blob);
+      $("#item-preview").src = itemPreviewUrl;
+      status.textContent = previousItemId(playlistId)
+        ? "The item before it, then this one coming in (shortened)."
+        : "This item coming onto the sign (shortened).";
+    } catch (error) {
+      if (sequence === itemPreviewSequence) status.textContent = error.message;
+    }
+  }
+
+  async function saveItem(form) {
+    const context = state.itemContext;
+    const { playlistId, id, body } = itemFormBody(form);
+    if (!id) throw new Error("Choose what to add");
     if (context.item) {
       await send(`/api/playlists/${playlistId}/items/${context.item.id}`, { ...body, position: context.item.position }, "PUT");
     } else {
@@ -857,6 +941,7 @@
     if (event.target.closest("#item-timing") && event.target.type === "number") {
       $("#item-form").elements.play_by.value = event.target.name === "repeats" ? "repeats" : "time";
     }
+    if (event.target.closest("#item-form")) scheduleItemPreview();
   });
 
   document.addEventListener("change", (event) => {
@@ -866,6 +951,7 @@
     }
     if (event.target.id === "item-type") { populateItemContent(); syncItemFields(); }
     if (event.target.id === "item-content") syncItemFields();
+    if (event.target.closest("#item-form")) scheduleItemPreview();
     if (event.target.id === "media-filter") renderMedia();
     if (event.target.id === "media-files") {
       const names = [...event.target.files].map((file) => el("div", { class: "upload-row" }, el("span", { class: "upload-name", text: file.name })));

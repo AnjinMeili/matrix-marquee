@@ -435,3 +435,70 @@ def test_media_list_reports_videos_still_being_prepared(tmp_path: Path) -> None:
         video = listed.json()[0]
         assert video["media_type"] == "video"
         assert isinstance(video["preparing"], bool)
+
+
+def gif_frames(data: bytes) -> List[Image.Image]:
+    from PIL import ImageSequence
+
+    with Image.open(BytesIO(data)) as gif:
+        return [frame.convert("RGB") for frame in ImageSequence.Iterator(gif)]
+
+
+def gif_seconds(data: bytes) -> float:
+    """Total play time of an animated GIF or WebP; encoders may merge identical
+    consecutive frames, so count time rather than frames."""
+    from PIL import ImageSequence
+
+    total = 0
+    with Image.open(BytesIO(data)) as animation:
+        for frame in ImageSequence.Iterator(animation):
+            frame.load()  # WebP fills in per-frame timing only once a frame is loaded
+            total += frame.info.get("duration", 0)
+    return total / 1000
+
+
+def test_item_preview_shows_previous_item_then_unsaved_entrance(tmp_path: Path) -> None:
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=MockMatrixAdapter())) as client:
+        green = add_panel(client, "GO", color_value="#00ff00", background_color="#003300")
+        red = add_panel(client, "STOP", color_value="#ff0000", background_color="#330000")
+        playlist = client.post("/api/playlists", json={"name": "Preview"}).json()
+        before = add_item(client, playlist["id"], item_type="text_panel", text_panel_id=green["id"], duration_ms=2000)
+
+        unsaved = {
+            "item_type": "text_panel", "text_panel_id": red["id"], "duration_ms": 1000,
+            "transition_type": "morph", "transition_duration_ms": 600,
+            "previous_item_id": before["id"],
+        }
+        response = client.post("/api/playlists/preview-item", json=unsaved)
+        assert response.status_code == 200 and response.headers["content-type"] == "image/webp"
+        frames = gif_frames(response.content)
+        # Lead-in (0.6 s) + entrance (~0.6 s) + item (1 s).
+        assert 1.8 <= gif_seconds(response.content) <= 2.6
+        assert frames[0].getpixel((1, 1))[1] > frames[0].getpixel((1, 1))[0]  # starts on the green panel
+        assert frames[-1].getpixel((1, 1))[0] > frames[-1].getpixel((1, 1))[1]  # ends on the red one
+
+        # Nothing was saved by previewing.
+        assert len(client.get(f"/api/playlists/{playlist['id']}").json()["items"]) == 1
+
+
+def test_run_through_pages_and_survives_a_missing_file(tmp_path: Path) -> None:
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=MockMatrixAdapter())) as client:
+        playlist = client.post("/api/playlists", json={"name": "Run"}).json()
+        media = client.post(
+            "/api/media", files={"file": ("gone.png", png_bytes(), "image/png")}
+        ).json()
+        add_item(client, playlist["id"], item_type="media", media_id=media["id"], duration_ms=1000)
+        for word in ("ONE", "TWO", "THREE"):
+            panel = add_panel(client, word)
+            add_item(client, playlist["id"], item_type="text_panel", text_panel_id=panel["id"],
+                     duration_ms=1000, transition_type="impact", transition_duration_ms=500)
+        (tmp_path / "media" / media["filename"]).unlink()
+
+        whole = client.get(f"/api/playlists/{playlist['id']}/run-through")
+        assert whole.status_code == 200 and whole.headers["content-type"] == "image/webp"
+        # Error card (1 s) + three items of 1 s, each with a 0.5 s entrance.
+        assert 4.5 <= gif_seconds(whole.content) <= 5.5
+        page = client.get(f"/api/playlists/{playlist['id']}/run-through?start=3&count=8")
+        assert page.status_code == 200
+        assert gif_seconds(page.content) < gif_seconds(whole.content)
+        assert client.get(f"/api/playlists/{playlist['id']}/run-through?start=10").status_code == 404

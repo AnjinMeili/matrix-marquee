@@ -108,6 +108,12 @@ class PlaylistItemUpdate(PlaylistItemBase):
     pass
 
 
+class PlaylistItemPreview(PlaylistItemBase):
+    """Unsaved item settings, previewed after the item that would play before it."""
+
+    previous_item_id: Optional[int] = None
+
+
 class PlaylistItem(PlaylistItemBase):
     id: int
     playlist_id: int
