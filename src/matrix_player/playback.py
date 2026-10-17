@@ -6,7 +6,16 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Iterable, Iterator, List, Optional, Protocol, Union
+from typing import (
+    Callable,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Union,
+)
 
 from PIL import Image
 
@@ -30,6 +39,13 @@ from .storage import MediaStorage
 class PlaybackController(Protocol):
     def state(self) -> PlaybackState: ...
     def start(self, playlist_id: int) -> PlaybackState: ...
+    def send_media(
+        self, media_id: int, fit_mode: str = "fit", duration_ms: Optional[int] = None
+    ) -> PlaybackState: ...
+    def send_text_panel(
+        self, panel_id: int, duration_ms: Optional[int] = None
+    ) -> PlaybackState: ...
+    def release(self) -> PlaybackState: ...
     def pause(self) -> PlaybackState: ...
     def resume(self) -> PlaybackState: ...
     def stop(self) -> PlaybackState: ...
@@ -50,29 +66,85 @@ class InMemoryPlaybackController:
         with self._lock:
             return self._state.model_copy()
 
-    def _set(self, status: PlaybackStatus, playlist_id: Optional[int]) -> PlaybackState:
+    def _set(
+        self,
+        status: PlaybackStatus,
+        playlist_id: Optional[int],
+        source_type: Optional[str] = None,
+        source_label: Optional[str] = None,
+        resume_playlist_id: Optional[int] = None,
+    ) -> PlaybackState:
         self._state = PlaybackState(
             status=status,
             playlist_id=playlist_id,
+            source_type=source_type,
+            source_label=source_label,
+            resume_playlist_id=resume_playlist_id,
             changed_at=datetime.now(timezone.utc),
         )
         return self._state.model_copy()
 
     def start(self, playlist_id: int) -> PlaybackState:
         with self._lock:
-            return self._set(PlaybackStatus.PLAYING, playlist_id)
+            return self._set(PlaybackStatus.PLAYING, playlist_id, "playlist")
+
+    def _send(self, source_type: str, target_id: int) -> PlaybackState:
+        with self._lock:
+            interrupted = (
+                self._state.playlist_id
+                if self._state.status != PlaybackStatus.STOPPED
+                else None
+            )
+            return self._set(
+                PlaybackStatus.PLAYING,
+                None,
+                source_type,
+                f"{source_type}:{target_id}",
+                interrupted,
+            )
+
+    def send_media(
+        self, media_id: int, fit_mode: str = "fit", duration_ms: Optional[int] = None
+    ) -> PlaybackState:
+        return self._send("media", media_id)
+
+    def send_text_panel(
+        self, panel_id: int, duration_ms: Optional[int] = None
+    ) -> PlaybackState:
+        return self._send("text_panel", panel_id)
+
+    def release(self) -> PlaybackState:
+        with self._lock:
+            if self._state.source_type not in {"media", "text_panel"}:
+                raise ValueError("no item is being shown")
+            resume_id = self._state.resume_playlist_id
+            if resume_id is None:
+                return self._set(PlaybackStatus.STOPPED, None)
+            return self._set(PlaybackStatus.PLAYING, resume_id, "playlist")
 
     def pause(self) -> PlaybackState:
         with self._lock:
             if self._state.status != PlaybackStatus.PLAYING:
                 raise ValueError("playback is not playing")
-            return self._set(PlaybackStatus.PAUSED, self._state.playlist_id)
+            return self._set(
+                PlaybackStatus.PAUSED,
+                self._state.playlist_id,
+                self._state.source_type,
+                self._state.source_label,
+                self._state.resume_playlist_id,
+            )
 
     def resume(self) -> PlaybackState:
         with self._lock:
             if self._state.status != PlaybackStatus.PAUSED:
                 raise ValueError("playback is not paused")
-            return self._set(PlaybackStatus.PLAYING, self._state.playlist_id)
+            return self._set(
+                PlaybackStatus.PLAYING,
+                self._state.playlist_id,
+                self._state.source_type,
+                self._state.source_label,
+                self._state.resume_playlist_id,
+            )
 
     def stop(self) -> PlaybackState:
         with self._lock:
@@ -98,6 +170,8 @@ Source = Union[
     Iterable[Frame],
     Callable[[], Iterable[Frame]],
 ]
+
+DEFAULT_SEND_DURATION_MS = 10000
 
 
 @dataclass
@@ -342,11 +416,43 @@ class DatabasePlaybackController:
         self.storage = storage
         self._lock = threading.RLock()
         self._playlist_id: Optional[int] = None
+        self._source_type: Optional[str] = None
+        self._source_label: Optional[str] = None
+        self._resume_playlist_id: Optional[int] = None
         self._changed_at = datetime.now(timezone.utc)
 
     @staticmethod
     def _transition(value: str) -> Transition:
         return Transition.CUT if value == "none" else Transition(value)
+
+    def _media_source(self, filename: Optional[str], duration: float, fit_mode: str) -> Source:
+        if not filename:
+            raise PlaybackError("media_not_found", "media record is missing")
+        path = self.storage.media_path(filename)
+        if not path.is_file():
+            raise PlaybackError("media_file_missing", "media file is missing")
+        suffix = path.suffix.lower()
+        if suffix == ".gif":
+            return GifFrameSource(path, self.service.matrix.size, fit_mode)
+        if suffix in {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}:
+            return VideoFrameSource(path, self.service.matrix.size)
+        return ImageFrameSource(path, self.service.matrix.size, duration, fit_mode)
+
+    def _text_source(self, row: Mapping[str, object], duration: float) -> Source:
+        if row["content"] is None:
+            raise PlaybackError("text_panel_not_found", "text panel is missing")
+        font = None if row["font_family"] == "default" else row["font_family"]
+        return TextFrameSource(
+            row["content"],
+            self.service.matrix.size,
+            duration,
+            font=font,
+            font_size=row["font_size"],
+            color=row["color_value"],
+            align=row["alignment"],
+            border_color=(row["border_color"] if row["border_style"] != "none" else None),
+            border_width=1 if row["border_style"] != "none" else 0,
+        )
 
     def _items(self, playlist_id: int) -> List[PlaybackItem]:
         rows = self.database.fetch_all(
@@ -363,37 +469,9 @@ class DatabasePlaybackController:
         for row in rows:
             duration = row["duration_ms"] / 1000.0
             if row["item_type"] == ItemType.MEDIA.value:
-                if not row["filename"]:
-                    raise PlaybackError("media_not_found", "playlist media record is missing")
-                path = self.storage.media_path(row["filename"])
-                if not path.is_file():
-                    raise PlaybackError("media_file_missing", "playlist media file is missing")
-                suffix = path.suffix.lower()
-                if suffix == ".gif":
-                    source: Source = GifFrameSource(path, self.service.matrix.size, row["fit_mode"])
-                elif suffix in {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}:
-                    source = VideoFrameSource(path, self.service.matrix.size)
-                else:
-                    source = ImageFrameSource(
-                        path, self.service.matrix.size, duration, row["fit_mode"]
-                    )
+                source = self._media_source(row["filename"], duration, row["fit_mode"])
             else:
-                if row["content"] is None:
-                    raise PlaybackError("text_panel_not_found", "playlist text panel is missing")
-                font = None if row["font_family"] == "default" else row["font_family"]
-                source = TextFrameSource(
-                    row["content"],
-                    self.service.matrix.size,
-                    duration,
-                    font=font,
-                    font_size=row["font_size"],
-                    color=row["color_value"],
-                    align=row["alignment"],
-                    border_color=(
-                        row["border_color"] if row["border_style"] != "none" else None
-                    ),
-                    border_width=1 if row["border_style"] != "none" else 0,
-                )
+                source = self._text_source(row, duration)
             items.append(
                 PlaybackItem(
                     source=source,
@@ -419,21 +497,91 @@ class DatabasePlaybackController:
         }[renderer_state]
         error = self.service.error
         with self._lock:
+            stopped = status == PlaybackStatus.STOPPED
             return PlaybackState(
                 status=status,
-                playlist_id=self._playlist_id if status != PlaybackStatus.STOPPED else None,
+                playlist_id=self._playlist_id if not stopped else None,
                 item_id=self.service.current_item_id,
+                source_type=self._source_type if not stopped else None,
+                source_label=self._source_label if not stopped else None,
+                resume_playlist_id=self._resume_playlist_id if not stopped else None,
                 changed_at=self._changed_at,
                 error=str(error) if error is not None else None,
             )
 
     def start(self, playlist_id: int) -> PlaybackState:
         items = self._items(playlist_id)
+        row = self.database.fetch_one(
+            "SELECT name FROM playlists WHERE id = ?", (playlist_id,)
+        )
         self.service.start(items, loop=True)
         with self._lock:
             self._playlist_id = playlist_id
+            self._source_type = "playlist"
+            self._source_label = row["name"] if row is not None else None
+            self._resume_playlist_id = None
             self._changed_at = datetime.now(timezone.utc)
         return self.state()
+
+    def send_media(
+        self, media_id: int, fit_mode: str = "fit", duration_ms: Optional[int] = None
+    ) -> PlaybackState:
+        row = self.database.fetch_one(
+            "SELECT filename, display_name FROM media WHERE id = ?", (media_id,)
+        )
+        if row is None:
+            raise PlaybackError("media_not_found", "media not found")
+        duration = (duration_ms or DEFAULT_SEND_DURATION_MS) / 1000.0
+        source = self._media_source(row["filename"], duration, fit_mode)
+        self._send(source, duration, "media", row["display_name"])
+        return self.state()
+
+    def send_text_panel(
+        self, panel_id: int, duration_ms: Optional[int] = None
+    ) -> PlaybackState:
+        row = self.database.fetch_one(
+            """SELECT name, content, font_family, font_size, alignment,
+                      color_value, border_style, border_color
+               FROM text_panels WHERE id = ?""",
+            (panel_id,),
+        )
+        if row is None:
+            raise PlaybackError("text_panel_not_found", "text panel not found")
+        duration = (duration_ms or DEFAULT_SEND_DURATION_MS) / 1000.0
+        source = self._text_source(row, duration)
+        self._send(source, duration, "text_panel", row["name"])
+        return self.state()
+
+    def _send(self, source: Source, duration: float, source_type: str, label: str) -> None:
+        with self._lock:
+            interrupted = self._playlist_id if self.service.is_running else None
+        item = PlaybackItem(
+            source=source,
+            duration=duration,
+            repeats=1,
+            transition=Transition.CUT,
+            transition_duration=0.0,
+        )
+        self.service.start([item], loop=True)
+        with self._lock:
+            self._playlist_id = None
+            self._source_type = source_type
+            self._source_label = label
+            self._resume_playlist_id = interrupted
+            self._changed_at = datetime.now(timezone.utc)
+
+    def release(self) -> PlaybackState:
+        """Ends a direct send and restores the playlist it interrupted."""
+        with self._lock:
+            if self._source_type not in {"media", "text_panel"}:
+                raise PlaybackError("not_sending", "no item is being shown")
+            resume_id = self._resume_playlist_id
+        if resume_id is None:
+            return self.stop()
+        try:
+            return self.start(resume_id)
+        except PlaybackError:
+            return self.stop()
 
     def pause(self) -> PlaybackState:
         if not self.service.pause():
@@ -453,6 +601,9 @@ class DatabasePlaybackController:
         self.service.stop()
         with self._lock:
             self._playlist_id = None
+            self._source_type = None
+            self._source_label = None
+            self._resume_playlist_id = None
             self._changed_at = datetime.now(timezone.utc)
         return self.state()
 

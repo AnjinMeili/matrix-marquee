@@ -117,10 +117,20 @@ class PlaybackCommand(ApiModel):
     playlist_id: Optional[int] = None
 
 
+class SendCommand(ApiModel):
+    target_type: str = Field(pattern="^(media|text_panel|playlist)$")
+    target_id: int = Field(ge=1)
+    fit_mode: FitMode = FitMode.FIT
+    duration_ms: Optional[int] = Field(default=None, ge=100, le=600000)
+
+
 class PlaybackState(ApiModel):
     status: PlaybackStatus
     playlist_id: Optional[int] = None
     item_id: Optional[int] = None
+    source_type: Optional[str] = None
+    source_label: Optional[str] = None
+    resume_playlist_id: Optional[int] = None
     changed_at: datetime
     error: Optional[str] = None
 

@@ -37,14 +37,28 @@
     const playback = status.playback || {};
     const active = state.playlists.find((playlist) => playlist.id === playback.playlist_id);
     const playing = playback.status === "playing" || playback.status === "paused";
+    const sending = playback.source_type === "media" || playback.source_type === "text_panel";
     const itemIndex = active?.items.findIndex((item) => item.id === playback.item_id) ?? -1;
-    const title = active?.name || "Nothing playing";
+    const title = sending ? playback.source_label : active?.name || "Nothing playing";
 
-    $("#dashboard-summary").textContent = playing ? `${playback.status}: ${title}` : "Player is stopped.";
-    $("#now-title").textContent = title;
-    $("#playback-pill").textContent = playback.status || "stopped";
-    $("#now-detail").textContent = playback.error || (playing ? "Playlist output is active" : "Select a playlist to begin");
-    $("#now-progress").textContent = itemIndex >= 0 ? `${itemIndex + 1} / ${active.items.length}` : "—";
+    const banner = $("#send-banner");
+    banner.hidden = !(sending && playing);
+    if (sending && playing) {
+      const resumeTarget = state.playlists.find((item) => item.id === playback.resume_playlist_id);
+      $("#send-label").textContent = playback.source_label || "item";
+      $("#send-resume").textContent = resumeTarget
+        ? ` Finishing returns to “${resumeTarget.name}”.`
+        : " Finishing blanks the panel.";
+    }
+
+    $("#dashboard-summary").textContent = playing
+      ? (sending ? `showing: ${title}` : `${playback.status}: ${title}`)
+      : "Player is stopped.";
+    $("#now-title").textContent = title || "Nothing playing";
+    $("#playback-pill").textContent = sending && playing ? "showing" : playback.status || "stopped";
+    $("#now-detail").textContent = playback.error
+      || (sending ? "Sent directly to the panel" : playing ? "Playlist output is active" : "Select a playlist to begin");
+    $("#now-progress").textContent = sending ? "single item" : itemIndex >= 0 ? `${itemIndex + 1} / ${active.items.length}` : "—";
     $("#live-preview").innerHTML = `<div><strong></strong><span></span></div>`;
     $("strong", $("#live-preview")).textContent = playing ? title : "MATRIX";
     $("span", $("#live-preview")).textContent = playing ? `${status.matrix.width} × ${status.matrix.height}` : "Ready for playback";
@@ -80,11 +94,55 @@
       list.appendChild(button);
       const action = document.createElement("div");
       action.className = "compact-item";
-      action.innerHTML = `<strong></strong><span>${playlist.items.length} items</span><button class="button">Play</button>`;
+      action.innerHTML = `<strong></strong><span>${playlist.items.length} items</span><button class="button">Send to panel</button>`;
       $("strong", action).textContent = playlist.name;
-      $("button", action).onclick = () => play(playlist.id);
+      $("button", action).onclick = () => sendToPanel("playlist", playlist.id, playlist.name);
       dashboard.appendChild(action);
     });
+    if (state.selectedPlaylist !== null) selectPlaylist(state.selectedPlaylist);
+  }
+
+  function selectPlaylist(id) {
+    const playlist = state.playlists.find((entry) => entry.id === id);
+    if (!playlist) return;
+    state.selectedPlaylist = id;
+    const editor = $("#playlist-editor");
+    editor.innerHTML = `<div class="card-heading"><div><p class="eyebrow">Playlist</p><h2></h2></div><span class="pill"></span></div><p class="media-meta"></p><div class="card-actions"><button class="button primary" data-send-playlist>Send to panel</button></div><div class="selection-list" id="playlist-items"></div>`;
+    $("h2", editor).textContent = playlist.name;
+    $(".pill", editor).textContent = `${playlist.items.length} items`;
+    $(".media-meta", editor).textContent = playlist.description || "No description.";
+    $("[data-send-playlist]", editor).onclick = () => sendToPanel("playlist", playlist.id, playlist.name);
+    const items = $("#playlist-items", editor);
+    items.innerHTML = playlist.items.length ? "" : '<p class="empty">This playlist has no items.</p>';
+    playlist.items.forEach((item, index) => {
+      const media = state.media.find((entry) => entry.id === item.media_id);
+      const panel = state.panels.find((entry) => entry.id === item.text_panel_id);
+      const row = document.createElement("div");
+      row.className = "compact-item";
+      row.innerHTML = `<strong></strong><span>${item.fit_mode} · ${Math.round(item.duration_ms / 1000)}s</span><button class="button" data-send-item>Send to panel</button>`;
+      $("strong", row).textContent = media?.display_name || panel?.name || `Item ${index + 1}`;
+      const target = media ? ["media", media.id, media.display_name] : panel ? ["text_panel", panel.id, panel.name] : null;
+      const button = $("[data-send-item]", row);
+      if (target) button.onclick = () => sendToPanel(target[0], target[1], target[2], item.fit_mode);
+      else button.disabled = true;
+      items.appendChild(row);
+    });
+  }
+
+  async function sendToPanel(targetType, targetId, label, fitMode = "stretch") {
+    try {
+      await request("/api/playback/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_type: targetType, target_id: targetId, fit_mode: fitMode })
+      });
+      await load();
+      notice(targetType === "playlist" ? `Playing “${label}”.` : `“${label}” sent to the panel.`);
+      location.hash = "dashboard";
+      selectView("dashboard");
+    } catch (error) {
+      notice(error.message, true);
+    }
   }
 
   function renderMedia() {
@@ -97,10 +155,11 @@
       const preview = item.thumbnail_path
         ? `<img alt="" src="/api/media/${item.id}/thumbnail">`
         : '<span aria-hidden="true">▶</span>';
-      card.innerHTML = `<div class="media-thumb">${preview}<span class="media-type">${item.media_type}</span></div><div class="media-body"><h3></h3><p class="media-meta"></p><button class="text-button danger">Delete</button></div>`;
+      card.innerHTML = `<div class="media-thumb">${preview}<span class="media-type">${item.media_type}</span></div><div class="media-body"><h3></h3><p class="media-meta"></p><div class="media-actions"><button class="button" data-send>Send to panel</button><button class="text-button danger" data-remove>Delete</button></div></div>`;
       $("h3", card).textContent = item.display_name;
       $(".media-meta", card).textContent = formatBytes(item.file_size_bytes);
-      $("button", card).onclick = () => removeMedia(item.id);
+      $("[data-send]", card).onclick = () => sendToPanel("media", item.id, item.display_name);
+      $("[data-remove]", card).onclick = () => removeMedia(item.id);
       grid.appendChild(card);
     });
   }
@@ -118,9 +177,12 @@
   }
 
   function showPanel(panel) {
-    $("#text-editor").innerHTML = `<div class="card-heading"><div><p class="eyebrow">Text panel</p><h2>${panel.name}</h2></div></div><p class="panel-copy"></p><button class="button danger" data-delete-panel>Delete panel</button>`;
-    $(".panel-copy", $("#text-editor")).textContent = panel.content;
-    $("[data-delete-panel]", $("#text-editor")).onclick = () => removePanel(panel.id);
+    $("#text-editor").innerHTML = `<div class="card-heading"><div><p class="eyebrow">Text panel</p><h2></h2></div></div><p class="panel-copy"></p><div class="card-actions"><button class="button" data-send-panel>Send to panel</button><button class="button danger" data-delete-panel>Delete panel</button></div>`;
+    const editor = $("#text-editor");
+    $("h2", editor).textContent = panel.name;
+    $(".panel-copy", editor).textContent = panel.content;
+    $("[data-send-panel]", editor).onclick = () => sendToPanel("text_panel", panel.id, panel.name);
+    $("[data-delete-panel]", editor).onclick = () => removePanel(panel.id);
   }
 
   async function load() {
@@ -138,11 +200,6 @@
       $("#connection-detail").textContent = "Check local connection";
       notice(error.message, true);
     }
-  }
-
-  async function play(id) {
-    try { await request("/api/playback/start", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({playlist_id: id}) }); notice("Playback started."); }
-    catch (error) { notice(error.message, true); }
   }
 
   async function removeMedia(id) {

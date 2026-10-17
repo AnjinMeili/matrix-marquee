@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..database import Database
 from ..playback import PlaybackController, PlaybackError
-from ..schemas import PlaybackCommand, PlaybackState
+from ..schemas import PlaybackCommand, PlaybackState, SendCommand
 from .dependencies import get_database, get_playback
 
 
@@ -47,6 +47,47 @@ def start(
         ) from error
     logger.info("playback_started", extra={"playlist_id": command.playlist_id})
     return state
+
+
+@router.post("/send", response_model=PlaybackState)
+def send(
+    command: SendCommand,
+    playback: PlaybackController = Depends(get_playback),
+) -> PlaybackState:
+    """Interrupts playback to show one item until the viewer releases it."""
+    try:
+        if command.target_type == "playlist":
+            state = playback.start(command.target_id)
+        elif command.target_type == "media":
+            state = playback.send_media(
+                command.target_id, command.fit_mode.value, command.duration_ms
+            )
+        else:
+            state = playback.send_text_panel(command.target_id, command.duration_ms)
+    except PlaybackError as error:
+        logger.warning(
+            "playback_send_failed",
+            extra={
+                "target_type": command.target_type,
+                "target_id": command.target_id,
+                "error_code": error.code,
+            },
+        )
+        status_code = 404 if error.code.endswith("_not_found") else 409
+        raise HTTPException(
+            status_code=status_code, detail={"code": error.code, "message": str(error)}
+        ) from error
+    logger.info(
+        "playback_sent",
+        extra={"target_type": command.target_type, "target_id": command.target_id},
+    )
+    return state
+
+
+@router.post("/release", response_model=PlaybackState)
+def release(playback: PlaybackController = Depends(get_playback)) -> PlaybackState:
+    """Ends a direct send and resumes the playlist it interrupted."""
+    return _control("release", playback)
 
 
 def _control(action: str, playback: PlaybackController) -> PlaybackState:

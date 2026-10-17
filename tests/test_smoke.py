@@ -127,6 +127,70 @@ def test_playlist_start_renders_frames_and_stop_blanks_matrix(tmp_path: Path) ->
         assert matrix.frame.getbbox() is None
 
 
+def test_send_to_panel_interrupts_playlist_and_release_restores_it(tmp_path: Path) -> None:
+    matrix = MockMatrixAdapter()
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=matrix)) as client:
+        loop_panel = client.post(
+            "/api/text-panels", json={"name": "Loop", "content": "LOOP"}
+        ).json()
+        solo_panel = client.post(
+            "/api/text-panels", json={"name": "Solo", "content": "SOLO"}
+        ).json()
+        playlist = client.post("/api/playlists", json={"name": "Background"}).json()
+        client.post(
+            f"/api/playlists/{playlist['id']}/items",
+            json={
+                "item_type": "text_panel",
+                "text_panel_id": loop_panel["id"],
+                "duration_ms": 100,
+            },
+        )
+        client.post("/api/playback/start", json={"playlist_id": playlist["id"]})
+
+        sent = client.post(
+            "/api/playback/send",
+            json={"target_type": "text_panel", "target_id": solo_panel["id"]},
+        )
+        assert sent.status_code == 200
+        state = sent.json()
+        assert state["status"] == "playing"
+        assert state["source_type"] == "text_panel"
+        assert state["source_label"] == "Solo"
+        assert state["playlist_id"] is None
+        assert state["resume_playlist_id"] == playlist["id"]
+
+        released = client.post("/api/playback/release")
+        assert released.status_code == 200
+        assert released.json()["playlist_id"] == playlist["id"]
+        assert released.json()["source_type"] == "playlist"
+
+        assert client.post("/api/playback/release").status_code == 409
+        assert (
+            client.post(
+                "/api/playback/send",
+                json={"target_type": "media", "target_id": 9999},
+            ).status_code
+            == 404
+        )
+        client.post("/api/playback/stop")
+
+
+def test_send_without_active_playlist_stops_on_release(tmp_path: Path) -> None:
+    matrix = MockMatrixAdapter()
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=matrix)) as client:
+        panel = client.post(
+            "/api/text-panels", json={"name": "Alone", "content": "ALONE"}
+        ).json()
+        sent = client.post(
+            "/api/playback/send",
+            json={"target_type": "text_panel", "target_id": panel["id"]},
+        ).json()
+        assert sent["resume_playlist_id"] is None
+        released = client.post("/api/playback/release").json()
+        assert released["status"] == "stopped"
+        assert matrix.frame.getbbox() is None
+
+
 def test_playback_service_emits_frames_at_matrix_size_and_blanks_on_stop() -> None:
     from matrix_player.matrix import MatrixConfig
     from matrix_player.playback import PlaybackItem, PlaybackService
