@@ -7,7 +7,7 @@ import shutil
 import socket
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from ..config import Settings
 from ..database import Database
@@ -39,6 +39,7 @@ def _local_address() -> Optional[str]:
 
 @router.get("/status")
 def status_endpoint(
+    request: Request,
     settings: Settings = Depends(get_settings),
     database: Database = Depends(get_database),
     playback: PlaybackController = Depends(get_playback),
@@ -49,9 +50,10 @@ def status_endpoint(
         "service": "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "matrix": {
-            "width": settings.matrix_width,
-            "height": settings.matrix_height,
-            "connected": False,
+            "width": request.app.state.matrix.size[0] if request.app.state.matrix else settings.matrix_width,
+            "height": request.app.state.matrix.size[1] if request.app.state.matrix else settings.matrix_height,
+            "connected": request.app.state.matrix_connected,
+            "mode": settings.matrix_mode,
         },
         "playback": playback.state().model_dump(mode="json"),
         "storage": {
@@ -103,4 +105,3 @@ def diagnostics_endpoint(
         "process": {"pid": os.getpid(), "load_average": load_average},
         "temperature_c": _temperature(),
     }
-

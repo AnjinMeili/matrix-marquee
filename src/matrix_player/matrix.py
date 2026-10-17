@@ -111,21 +111,26 @@ class RGBMatrixAdapter:
         options.pixel_mapper_config = selected.pixel_mapper_config
         options.pwm_lsb_nanoseconds = selected.pwm_lsb_nanoseconds
         options.gpio_slowdown = selected.gpio_slowdown
+        # The library drops to the 'daemon' user after init unless told otherwise,
+        # which would strip the service's access to its media and state directories.
+        options.drop_privileges = False
         self.config = selected
         self._matrix = RGBMatrix(options=options)
+        self._size = (self._matrix.width, self._matrix.height)
         self._lock = threading.RLock()
 
     @property
     def size(self) -> Tuple[int, int]:
-        return self.config.logical_size
+        """Canvas size reported by the driver once pixel mappers are applied."""
+        return self._size
 
     def show(self, image: Image.Image) -> None:
         if image.size != self.size:
             raise ValueError("frame size {} does not match matrix {}".format(image.size, self.size))
         with self._lock:
-            # The mapper rotates the driver's 64x96 framebuffer to the
-            # installation's 96x64 viewing orientation.
-            self._matrix.SetImage(image.convert("RGB").rotate(90, expand=True))
+            # The Rotate:90 pixel mapper already presents the driver's 64x96
+            # framebuffer as a 96x64 canvas, so frames are sent through as-is.
+            self._matrix.SetImage(image.convert("RGB"))
 
     def blank(self) -> None:
         with self._lock:

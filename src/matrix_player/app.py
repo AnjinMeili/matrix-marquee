@@ -13,7 +13,12 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
 from .database import Database
-from .playback import InMemoryPlaybackController, PlaybackController
+from .matrix import MatrixAdapter, MatrixConfig, MockMatrixAdapter, RGBMatrixAdapter
+from .playback import (
+    DatabasePlaybackController,
+    PlaybackController,
+    PlaybackService,
+)
 from .routes import captive, media, playback, playlists, system, text_panels
 from .storage import MediaStorage
 
@@ -49,6 +54,7 @@ def configure_logging(level: str) -> None:
 def create_app(
     settings: Optional[Settings] = None,
     playback_controller: Optional[PlaybackController] = None,
+    matrix_adapter: Optional[MatrixAdapter] = None,
 ) -> FastAPI:
     configured = settings or Settings.from_env()
 
@@ -56,10 +62,31 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configured.ensure_directories()
         app.state.database.initialize()
-        logging.getLogger(__name__).info("application_started")
-        yield
-        app.state.playback.stop()
-        logging.getLogger(__name__).info("application_stopped")
+        if playback_controller is None:
+            try:
+                adapter = matrix_adapter or _create_matrix(configured)
+                app.state.matrix = adapter
+                app.state.playback = DatabasePlaybackController(
+                    PlaybackService(adapter), app.state.database, app.state.storage
+                )
+                app.state.matrix_connected = True
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "matrix_initialization_failed", extra={"matrix_mode": configured.matrix_mode}
+                )
+                raise
+        try:
+            logging.getLogger(__name__).info(
+                "application_started", extra={"matrix_mode": configured.matrix_mode}
+            )
+            yield
+        finally:
+            try:
+                app.state.playback.close()
+            except Exception:
+                logging.getLogger(__name__).exception("playback_shutdown_failed")
+            app.state.matrix_connected = False
+            logging.getLogger(__name__).info("application_stopped")
 
     configure_logging(configured.log_level)
     app = FastAPI(
@@ -72,7 +99,9 @@ def create_app(
     app.state.settings = configured
     app.state.database = Database(configured.database_path)
     app.state.storage = MediaStorage(configured)
-    app.state.playback = playback_controller or InMemoryPlaybackController()
+    app.state.playback = playback_controller
+    app.state.matrix = matrix_adapter
+    app.state.matrix_connected = matrix_adapter is not None
 
     app.include_router(system.router)
     app.include_router(media.router)
@@ -101,6 +130,23 @@ def create_app(
         return {"status": "ok"}
 
     return app
+
+
+def _create_matrix(settings: Settings) -> MatrixAdapter:
+    if settings.matrix_mode == "mock":
+        return MockMatrixAdapter((settings.matrix_width, settings.matrix_height))
+    return RGBMatrixAdapter(
+        MatrixConfig(
+            rows=settings.matrix_rows,
+            cols=settings.matrix_cols,
+            chain_length=settings.matrix_chain_length,
+            parallel=settings.matrix_parallel,
+            multiplexing=settings.matrix_multiplexing,
+            pixel_mapper_config=settings.matrix_pixel_mapper,
+            pwm_lsb_nanoseconds=settings.matrix_pwm_lsb_nanoseconds,
+            gpio_slowdown=settings.matrix_gpio_slowdown,
+        )
+    )
 
 
 app = create_app()

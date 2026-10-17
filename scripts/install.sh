@@ -48,6 +48,15 @@ else
     echo "warning: no Python dependency manifest found; service may not start" >&2
 fi
 
+# The rgbmatrix bindings are built on-device (see scripts/build-rgbmatrix.sh) and
+# cached as a wheel, because each release gets a fresh virtualenv.
+if ls /opt/protest/wheels/rgbmatrix-*.whl >/dev/null 2>&1; then
+    "$release/.venv/bin/pip" install --disable-pip-version-check --no-input \
+        /opt/protest/wheels/rgbmatrix-*.whl
+else
+    echo "warning: no rgbmatrix wheel in /opt/protest/wheels; matrix will run in mock mode" >&2
+fi
+
 if [ ! -e /etc/protest/protest.env ]; then
     install -m 0600 "$release/.env.example" /etc/protest/protest.env
 fi

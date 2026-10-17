@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..database import Database
-from ..playback import PlaybackController
+from ..playback import PlaybackController, PlaybackError
 from ..schemas import PlaybackCommand, PlaybackState
 from .dependencies import get_database, get_playback
 
@@ -35,7 +35,16 @@ def start(
         raise HTTPException(status_code=404, detail="playlist not found")
     if not row["is_enabled"]:
         raise HTTPException(status_code=409, detail="playlist is disabled")
-    state = playback.start(command.playlist_id)
+    try:
+        state = playback.start(command.playlist_id)
+    except PlaybackError as error:
+        logger.warning(
+            "playback_start_failed",
+            extra={"playlist_id": command.playlist_id, "error_code": error.code},
+        )
+        raise HTTPException(
+            status_code=409, detail={"code": error.code, "message": str(error)}
+        ) from error
     logger.info("playback_started", extra={"playlist_id": command.playlist_id})
     return state
 
@@ -44,7 +53,11 @@ def _control(action: str, playback: PlaybackController) -> PlaybackState:
     try:
         state = getattr(playback, action)()
     except ValueError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
+        code = error.code if isinstance(error, PlaybackError) else "invalid_state"
+        logger.warning("playback_control_failed", extra={"action": action, "error_code": code})
+        raise HTTPException(
+            status_code=409, detail={"code": code, "message": str(error)}
+        ) from error
     logger.info("playback_changed", extra={"action": action, "status": state.status.value})
     return state
 
@@ -62,4 +75,3 @@ def resume(playback: PlaybackController = Depends(get_playback)) -> PlaybackStat
 @router.post("/stop", response_model=PlaybackState)
 def stop(playback: PlaybackController = Depends(get_playback)) -> PlaybackState:
     return _control("stop", playback)
-
