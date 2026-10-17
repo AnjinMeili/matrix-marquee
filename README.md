@@ -12,14 +12,21 @@ Wi-Fi; no internet connection is needed.
   flash, comic POW, punch-in) with a speed setting, animated borders, and text
   over a background picture. One-tap looks (Protest, Comic POW, Alarm, …).
 - **Pictures and videos** — JPEG, PNG, WebP, GIF, MP4, WebM, and iPhone MOV.
-  Items can be renamed and tagged; tags filter and search the library and add
-  whole groups to a playlist.
+  Items can be renamed and tagged; tags filter and search the library. Select
+  a batch to tag it or add it to a playlist in one step. Videos and animated
+  GIFs play, with controls, in their edit pane.
 - **Playlists** — per-item time or "play the animation N times", entrance
   effects (comic slam, morph, camera flash, push, fade, zoom, …), and play
   modes (in order, shuffle, random, stop at the end). Playlists pick up where
   they left off after a reboot, a stop, or showing something on its own.
 - **Previews** — every editor previews with the sign's own renderer before
   saving, and the Sign page mirrors the panel live.
+- **Brightness and gamma** — live controls, kept across restarts, and a
+  calibration test card for outdoor panels that wash out or smear.
+- **Heat and power** — the Pi's temperature, CPU speed, and under-voltage and
+  slow-down flags, with warnings on the Sign page and a 24-hour record.
+- **Backups** — one tap saves every message, playlist, picture, and video to
+  the phone or laptop as a zip.
 - **Keeps running** — an item that cannot play is skipped and reported on the
   Sign page; the rest of the playlist carries on.
 
@@ -114,6 +121,14 @@ Reserve CPU core 3 for the panel refresh thread to reduce flicker: append
 `isolcpus=3` to the single line in `/boot/firmware/cmdline.txt` and reboot.
 The matrix library logs a reminder at startup until this is set. Frames are
 drawn off-screen and swapped on vsync, so motion does not tear.
+
+Outdoor high-brightness 1/8-scan panels hold each pixel's light longer, so at
+full brightness they can wash out and smear moving pictures. Use **Settings →
+Brightness & gamma**: show the test card, then lower brightness or raise gamma
+until its dark steps stay separate and its edges stop trailing. Gamma 1.0 and
+brightness 100% are the panel's untouched look. Static-like sparkles or tearing
+at panel edges are a power problem instead: fit low-ESR capacitors at each
+panel's power input, as the matrix library's wiring guide recommends.
 
 ## Media handling
 

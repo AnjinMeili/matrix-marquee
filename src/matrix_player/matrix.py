@@ -204,6 +204,3 @@ class RGBMatrixAdapter:
     def close(self) -> None:
         self.blank()
 
-
-MockMatrix = MockMatrixAdapter
-HardwareMatrix = RGBMatrixAdapter
