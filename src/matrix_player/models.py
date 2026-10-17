@@ -28,6 +28,7 @@ class FitMode(str, Enum):
     FIT = "fit"
     CROP = "crop"
     LETTERBOX = "letterbox"
+    STRETCH = "stretch"
 
 
 class PlaybackStatus(str, Enum):

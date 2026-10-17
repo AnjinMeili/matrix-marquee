@@ -1,7 +1,7 @@
 """Captive portal probes used by common operating systems."""
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 
 router = APIRouter(tags=["captive-portal"])
@@ -13,10 +13,13 @@ def _portal(request: Request) -> str:
 
 @router.get("/hotspot-detect.html", response_class=HTMLResponse)
 @router.get("/library/test/success.html", response_class=HTMLResponse)
-def apple_probe() -> HTMLResponse:
+def apple_probe(request: Request) -> HTMLResponse:
+    portal = _portal(request)
     return HTMLResponse(
-        "<!doctype html><html><head><title>Success</title></head>"
-        "<body>Success</body></html>"
+        "<!doctype html><html><head><meta name='viewport' "
+        "content='width=device-width,initial-scale=1'><title>PROTEST</title>"
+        f"<meta http-equiv='refresh' content='0;url={portal}'></head>"
+        f"<body><a href='{portal}'>Open PROTEST Matrix Player</a></body></html>"
     )
 
 
@@ -26,14 +29,14 @@ def android_probe(request: Request) -> RedirectResponse:
     return RedirectResponse(_portal(request), status_code=302)
 
 
-@router.get("/connecttest.txt", response_class=PlainTextResponse)
-def windows_connect_test() -> PlainTextResponse:
-    return PlainTextResponse("Microsoft Connect Test")
+@router.get("/connecttest.txt")
+def windows_connect_test(request: Request) -> RedirectResponse:
+    return RedirectResponse(_portal(request), status_code=302)
 
 
-@router.get("/ncsi.txt", response_class=PlainTextResponse)
-def windows_ncsi() -> PlainTextResponse:
-    return PlainTextResponse("Microsoft NCSI")
+@router.get("/ncsi.txt")
+def windows_ncsi(request: Request) -> RedirectResponse:
+    return RedirectResponse(_portal(request), status_code=302)
 
 
 @router.get("/canonical.html")

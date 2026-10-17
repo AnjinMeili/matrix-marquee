@@ -119,5 +119,6 @@ systemctl restart protest
 
 Before maintenance, run the health check and configuration backup. After an
 update, inspect `systemctl status protest`, run `scripts/health-check.sh`, and
-confirm the matrix blanks safely when playback stops. Do not expose port 8000
-to an untrusted network; the offline AP UI has no assumption of remote access.
+confirm the matrix blanks safely when playback stops. Do not expose the HTTP
+service to an untrusted network; the offline AP UI has no assumption of remote
+access.

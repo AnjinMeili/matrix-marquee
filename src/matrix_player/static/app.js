@@ -21,6 +21,47 @@
     node.classList.toggle("error", error);
   }
 
+  function formatBytes(value) {
+    if (!Number.isFinite(value)) return "—";
+    const units = ["B", "KB", "MB", "GB"];
+    let amount = value;
+    let unit = 0;
+    while (amount >= 1024 && unit < units.length - 1) {
+      amount /= 1024;
+      unit += 1;
+    }
+    return `${amount.toFixed(unit ? 1 : 0)} ${units[unit]}`;
+  }
+
+  function renderStatus(status, network) {
+    const playback = status.playback || {};
+    const active = state.playlists.find((playlist) => playlist.id === playback.playlist_id);
+    const playing = playback.status === "playing" || playback.status === "paused";
+    const itemIndex = active?.items.findIndex((item) => item.id === playback.item_id) ?? -1;
+    const title = active?.name || "Nothing playing";
+
+    $("#dashboard-summary").textContent = playing ? `${playback.status}: ${title}` : "Player is stopped.";
+    $("#now-title").textContent = title;
+    $("#playback-pill").textContent = playback.status || "stopped";
+    $("#now-detail").textContent = playback.error || (playing ? "Playlist output is active" : "Select a playlist to begin");
+    $("#now-progress").textContent = itemIndex >= 0 ? `${itemIndex + 1} / ${active.items.length}` : "—";
+    $("#live-preview").innerHTML = `<div><strong></strong><span></span></div>`;
+    $("strong", $("#live-preview")).textContent = playing ? title : "MATRIX";
+    $("span", $("#live-preview")).textContent = playing ? `${status.matrix.width} × ${status.matrix.height}` : "Ready for playback";
+
+    $("#health-matrix").textContent = status.matrix.connected
+      ? `${status.matrix.width} × ${status.matrix.height} connected`
+      : `${status.matrix.width} × ${status.matrix.height} unavailable`;
+    $("#health-temp").textContent = status.temperature_c == null ? "—" : `${status.temperature_c.toFixed(1)} °C`;
+    $("#health-storage").textContent = `${formatBytes(status.storage.used_bytes)} / ${formatBytes(status.storage.total_bytes)}`;
+    $("#health-network").textContent = network.access_point.active
+      ? `${network.access_point.ssid || "AP"} active`
+      : "Inactive";
+    $("#health-upstream").textContent = network.upstream.available
+      ? `${network.upstream.interface || "Network"} available`
+      : "Offline";
+  }
+
   function renderPlaylists() {
     const list = $("#playlist-list");
     const dashboard = $("#dashboard-playlists");
@@ -53,8 +94,12 @@
     state.media.forEach((item) => {
       const card = document.createElement("article");
       card.className = "media-card";
-      card.innerHTML = `<img alt="" src="/api/media/${item.id}/thumbnail"><div class="media-card-body"><strong></strong><small>${item.media_type}</small><button class="text-button danger">Delete</button></div>`;
-      $("strong", card).textContent = item.display_name;
+      const preview = item.thumbnail_path
+        ? `<img alt="" src="/api/media/${item.id}/thumbnail">`
+        : '<span aria-hidden="true">▶</span>';
+      card.innerHTML = `<div class="media-thumb">${preview}<span class="media-type">${item.media_type}</span></div><div class="media-body"><h3></h3><p class="media-meta"></p><button class="text-button danger">Delete</button></div>`;
+      $("h3", card).textContent = item.display_name;
+      $(".media-meta", card).textContent = formatBytes(item.file_size_bytes);
       $("button", card).onclick = () => removeMedia(item.id);
       grid.appendChild(card);
     });
@@ -80,14 +125,14 @@
 
   async function load() {
     try {
-      const [status, playlists, media, panels] = await Promise.all([
-        request("/api/status"), request("/api/playlists"), request("/api/media"), request("/api/text-panels")
+      const [status, network, playlists, media, panels] = await Promise.all([
+        request("/api/status"), request("/api/network"), request("/api/playlists"),
+        request("/api/media"), request("/api/text-panels")
       ]);
       state.playlists = playlists; state.media = media; state.panels = panels;
       $("#connection-label").textContent = "Player online";
       $("#connection-detail").textContent = `${status.matrix?.width || 64} × ${status.matrix?.height || 96}`;
-      $("#health-matrix").textContent = `${status.matrix?.width || 64} × ${status.matrix?.height || 96}`;
-      renderPlaylists(); renderMedia(); renderPanels();
+      renderPlaylists(); renderMedia(); renderPanels(); renderStatus(status, network);
     } catch (error) {
       $("#connection-label").textContent = "Service unavailable";
       $("#connection-detail").textContent = "Check local connection";
@@ -123,6 +168,12 @@
     const action = event.target.closest("[data-action]");
     if (action && action.dataset.action === "dismiss-notice") $("#notice").hidden = true;
     if (action && action.dataset.action === "refresh-status") load();
+    const playback = event.target.closest("[data-playback]");
+    if (playback) {
+      request(`/api/playback/${playback.dataset.playback}`, { method: "POST" })
+        .then(() => load())
+        .catch((error) => notice(error.message, true));
+    }
   });
   window.addEventListener("hashchange", () => selectView(location.hash.slice(1) || "dashboard"));
   selectView(location.hash.slice(1) || "dashboard");

@@ -61,12 +61,14 @@ if ip route show default | grep -q "dev $AP_INTERFACE"; then
     echo "refusing: $AP_INTERFACE currently carries the default route" >&2
     exit 1
 fi
-if ip -4 address show dev "$AP_INTERFACE" | grep -q 'inet '; then
-    echo "refusing: $AP_INTERFACE already has an IPv4 address" >&2
+existing_addresses=$(ip -4 -o address show dev "$AP_INTERFACE" | awk '{print $4}')
+if [ -n "$existing_addresses" ] && [ "$existing_addresses" != "$AP_ADDRESS/24" ]; then
+    echo "refusing: $AP_INTERFACE has a conflicting IPv4 address" >&2
     exit 1
 fi
-if ip -4 route show | grep -q "^${AP_ADDRESS%.*}.0/24 "; then
-    echo "refusing: AP subnet already has a route" >&2
+existing_route=$(ip -4 route show "${AP_ADDRESS%.*}.0/24")
+if [ -n "$existing_route" ] && ! printf '%s\n' "$existing_route" | grep -q "dev $AP_INTERFACE"; then
+    echo "refusing: AP subnet already has a conflicting route" >&2
     exit 1
 fi
 
@@ -90,10 +92,10 @@ render() {
         -e "s|@DHCP_START@|$DHCP_START|g" \
         -e "s|@DHCP_END@|$DHCP_END|g" "$1" > "$2"
 }
+install -m 0600 /dev/null /etc/hostapd/hostapd.conf
+install -m 0644 /dev/null /etc/dnsmasq.d/protest.conf
 render "$TEMPLATE_DIR/hostapd.conf.template" /etc/hostapd/hostapd.conf
 render "$TEMPLATE_DIR/dnsmasq.conf.template" /etc/dnsmasq.d/protest.conf
-chmod 0600 /etc/hostapd/hostapd.conf
-chmod 0644 /etc/dnsmasq.d/protest.conf
 cat > /etc/systemd/system/protest-ap-interface.service <<EOF
 [Unit]
 Description=Configure dedicated Protest AP interface
@@ -116,6 +118,7 @@ command -v hostapd >/dev/null 2>&1 || { echo "hostapd is not installed" >&2; exi
 command -v dnsmasq >/dev/null 2>&1 || { echo "dnsmasq is not installed" >&2; exit 1; }
 dnsmasq --test
 systemctl daemon-reload
+systemctl unmask hostapd
 systemctl enable protest-ap-interface.service hostapd dnsmasq
 systemctl restart protest-ap-interface.service
 systemctl restart hostapd dnsmasq

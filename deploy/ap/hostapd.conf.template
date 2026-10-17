@@ -1,6 +1,8 @@
 # Rendered by scripts/setup-ap.sh. Do not place a real passphrase in source control.
 interface=@AP_INTERFACE@
 driver=nl80211
+ctrl_interface=/run/hostapd
+ctrl_interface_group=0
 ssid=@AP_SSID@
 hw_mode=g
 channel=@AP_CHANNEL@

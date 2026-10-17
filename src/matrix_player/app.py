@@ -172,4 +172,4 @@ app = create_app()
 def run() -> None:
     import uvicorn
 
-    uvicorn.run("matrix_player.app:app", host="0.0.0.0", port=8000)
+    uvicorn.run("matrix_player.app:app", host="0.0.0.0", port=80)

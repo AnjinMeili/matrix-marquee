@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-: "${PROTEST_HEALTH_URL:=http://127.0.0.1:8000/health}"
+: "${PROTEST_HEALTH_URL:=http://127.0.0.1:80/health}"
 : "${HEALTH_TIMEOUT:=5}"
 
 case "$PROTEST_HEALTH_URL" in
@@ -22,4 +22,3 @@ case "$body" in
         ;;
 esac
 printf '%s\n' "protest health check passed"
-

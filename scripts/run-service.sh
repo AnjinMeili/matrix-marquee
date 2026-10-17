@@ -2,7 +2,7 @@
 set -eu
 
 : "${PROTEST_HOST:=0.0.0.0}"
-: "${PROTEST_PORT:=8000}"
+: "${PROTEST_PORT:=80}"
 : "${PROTEST_APP_MODULE:=matrix_player.app:app}"
 : "${PROTEST_WORKERS:=1}"
 
