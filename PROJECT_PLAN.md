@@ -417,12 +417,15 @@ The questions this section originally listed have been settled as follows:
 
 ## 13. Status and open items
 
-Built beyond the MVP list: text effects and colour styles, bundled display fonts, play modes (loop, shuffle, random, once) with resume, media tags and grouping, a whole-sign backup download, and a live panel mirror.
+Built beyond the MVP list: text effects and colour styles, bundled display fonts, play modes (loop, shuffle, random, once) with resume, media tags with batch selection and grouping, a whole-sign backup download, a live panel mirror, heat and power monitoring, brightness and gamma control with a test card, and the `protest.local` name over mDNS.
 
 Not built yet:
 
+- **Counting street sounds** with a USB microphone: car horns, shouting, crowds, sirens, counted on the device without keeping any audio. See [docs/sound-events-plan.md](docs/sound-events-plan.md).
+- **Enclosure and power sensors** on `i2c0` (GPIO 0/1, the only free pins): an SHT31/SHT45 for enclosure temperature and humidity, and INA226/INA228 with an external 50 A shunt on the panels' 5 V feed.
+- **Streaming to WLED panels** over DDP. Deferred; see [docs/wled-output-plan.md](docs/wled-output-plan.md).
 - **Upstream internet through a phone.** A phone joined to the sign's Wi-Fi cannot share its connection back over the same link. This needs USB tethering or a second Wi-Fi adapter joining the phone's hotspot, plus NAT.
 - **Access control.** The Wi-Fi passphrase is the only protection.
-- **Brightness** and scheduling.
+- **Brightness scheduling.** Brightness and gamma are adjustable, but not yet by time of day.
 - **Restoring a backup from the web UI.** The README documents the manual steps.
 - **Drag-and-drop reordering.** Items move with up/down buttons.

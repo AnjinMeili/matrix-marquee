@@ -848,3 +848,32 @@ def test_test_card_shows_and_returns_to_the_playlist(tmp_path: Path) -> None:
         released = client.post("/api/playback/release").json()
         assert released["playlist_id"] == playlist["id"]
         client.post("/api/playback/stop")
+
+
+def test_batch_tags_add_and_remove_across_a_selection(tmp_path: Path) -> None:
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=MockMatrixAdapter())) as client:
+        ids = [
+            client.post("/api/media", files={"file": (f"p{n}.png", png_bytes(color), "image/png")}).json()["id"]
+            for n, color in ((1, "red"), (2, "green"), (3, "blue"))
+        ]
+        client.patch(f"/api/media/{ids[0]}", json={"tags": ["night"]})
+
+        added = client.post("/api/media/batch-tags", json={"media_ids": ids[:2], "add": ["#March", "rally"]})
+        assert added.status_code == 200
+        by_id = {item["id"]: item["tags"] for item in added.json()}
+        assert by_id == {ids[0]: ["march", "night", "rally"], ids[1]: ["march", "rally"]}
+        assert client.get(f"/api/media/{ids[2]}").json()["tags"] == []
+
+        swapped = client.post(
+            "/api/media/batch-tags", json={"media_ids": ids, "add": ["crowd"], "remove": ["rally"]}
+        ).json()
+        assert {item["id"]: item["tags"] for item in swapped}[ids[0]] == ["crowd", "march", "night"]
+        assert "rally" not in [tag["name"] for tag in client.get("/api/media/tags").json()]
+
+        missing = client.post("/api/media/batch-tags", json={"media_ids": [ids[0], 9999], "add": ["x"]})
+        assert missing.status_code == 404
+        assert "x" not in client.get(f"/api/media/{ids[0]}").json()["tags"]  # nothing half-applied
+
+        many = [f"t{n}" for n in range(19)]
+        assert client.post("/api/media/batch-tags", json={"media_ids": [ids[0]], "add": many}).status_code == 422
+        assert client.post("/api/media/batch-tags", json={"media_ids": [], "add": ["x"]}).status_code == 422

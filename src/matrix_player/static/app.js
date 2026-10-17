@@ -5,7 +5,8 @@
   const state = {
     playlists: [], media: [], panels: [], fonts: [], status: null, network: null,
     selectedPlaylist: null, selectedPanel: null, itemContext: null, editingPanel: null,
-    tags: [], tagFilter: null, editingMedia: null, draftTags: []
+    tags: [], tagFilter: null, editingMedia: null, draftTags: [],
+    selecting: false, selected: new Set(), visibleMedia: [], batchAdd: [], batchRemove: new Set()
   };
 
   const TRANSITIONS = [
@@ -46,6 +47,12 @@
     }
     children.flat().forEach((child) => { if (child != null) node.append(child); });
     return node;
+  }
+
+  // Like replaceChildren, but skips null/undefined, which replaceChildren would
+  // otherwise insert as the literal text "null".
+  function fill(node, ...children) {
+    node.replaceChildren(...children.flat().filter((child) => child != null));
   }
 
   async function request(path, options = {}) {
@@ -481,7 +488,7 @@
           el("button", { class: "icon-button", "aria-label": "Show now", text: "▶", onclick: () => showNow(target.kind, target.id, target.name, item.fit_mode, `item-${item.id}`) }),
           el("button", { class: "icon-button danger", "aria-label": "Remove", text: "✕", onclick: () => removeItem(playlist, item) })));
     });
-    editor.replaceChildren(
+    fill(editor,
       el("div", { class: "card-heading" },
         el("div", {}, el("p", { class: "eyebrow", text: "Playlist" }), el("h2", { text: playlist.name })),
         el("span", { class: "pill", text: `${MODE_LABEL[playlist.play_mode] || ""}${playlist.is_default ? " · power-on" : ""}` })),
@@ -816,7 +823,7 @@
         onclick: () => openItemDialog({ targetType: "media", targetId: visible[0].id, targetIds: visible.map((item) => item.id) })
       })
       : null;
-    bar.replaceChildren(
+    fill(bar,
       el("div", { class: "tag-row" }, chip(null, "All"), ...state.tags.map((tag) => chip(tag.name, `#${tag.name} ${tag.count}`))),
       add);
   }
@@ -830,6 +837,11 @@
       && (!state.tagFilter || item.tags.includes(state.tagFilter))
       && (!query || item.display_name.toLowerCase().includes(query) || item.tags.some((tag) => tag.includes(query))));
     $("#media-count").textContent = `${items.length} item${items.length === 1 ? "" : "s"}`;
+    state.visibleMedia = items;
+    const known = new Set(state.media.map((item) => item.id));
+    state.selected.forEach((id) => { if (!known.has(id)) state.selected.delete(id); });
+    grid.classList.toggle("selecting", state.selecting);
+    renderSelectionBar();
     renderTagFilter(items);
     if (!items.length) {
       grid.replaceChildren(el("p", { class: "empty", text: state.media.length ? "Nothing matches." : "Nothing uploaded yet." }));
@@ -838,15 +850,24 @@
     grid.replaceChildren(...items.map((item) => {
       const length = item.duration_ms ? ` · ${seconds(item.duration_ms)}` : "";
       const preparing = item.preparing ? " · getting it ready for the sign…" : "";
-      return el("article", { class: "media-card", "data-anchor": `media-${item.id}` },
-        el("div", { class: "media-thumb" }, thumb("media", item.id), el("span", { class: "media-type", text: TYPE_LABEL[item.media_type] })),
+      const picked = state.selected.has(item.id);
+      return el("article", {
+        class: `media-card${picked ? " selected" : ""}`, "data-anchor": `media-${item.id}`, "data-id": item.id,
+        "aria-pressed": state.selecting ? String(picked) : null,
+        onclick: (event) => { if (state.selecting) { event.preventDefault(); toggleSelected(item.id, event.currentTarget); } }
+      },
+        el("div", { class: "media-thumb" }, thumb("media", item.id), el("span", { class: "media-type", text: TYPE_LABEL[item.media_type] }),
+          el("span", { class: "select-check", "aria-hidden": "true", text: "✓" })),
         el("div", { class: "media-body" },
           el("h3", { text: item.display_name, title: item.display_name }),
           el("p", { class: "media-meta", text: `${formatBytes(item.file_size_bytes)}${length}${preparing}` }),
           item.tags.length
             ? el("div", { class: "card-tags" }, ...item.tags.map((tag) => el("button", {
               type: "button", class: "tag-chip small", text: `#${tag}`,
-              onclick: () => { state.tagFilter = tag; renderMedia(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+              onclick: () => {
+                if (state.selecting) return;  // in selection mode a tap picks the card instead
+                state.tagFilter = tag; renderMedia(); window.scrollTo({ top: 0, behavior: "smooth" });
+              }
             })))
             : null,
           el("div", { class: "media-actions" },
@@ -855,6 +876,96 @@
             el("button", { class: "icon-button", "aria-label": "Name and tags", text: "✎", onclick: () => openMediaDialog(item) }),
             el("button", { class: "icon-button danger", "aria-label": "Delete", text: "✕", onclick: () => removeMedia(item) }))));
     }));
+  }
+
+  // ---------- Selecting several pictures and videos ----------
+
+  function renderSelectionBar() {
+    const count = state.selected.size;
+    $("#selection-bar").hidden = !state.selecting;
+    $("#selection-count").textContent = `${count} selected`;
+    document.querySelectorAll("[data-action=selection-playlist], [data-action=selection-tags]").forEach((button) => { button.disabled = !count; });
+    const toggle = $("#select-toggle");
+    toggle.setAttribute("aria-pressed", String(state.selecting));
+    toggle.textContent = state.selecting ? "Done" : "☑ Select";
+  }
+
+  function toggleSelected(id, card) {
+    if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+    card.classList.toggle("selected", state.selected.has(id));
+    card.setAttribute("aria-pressed", String(state.selected.has(id)));
+    renderSelectionBar();
+  }
+
+  function setSelecting(on) {
+    state.selecting = on;
+    if (!on) state.selected.clear();
+    renderMedia();
+  }
+
+  function selectedMedia() {
+    return state.media.filter((item) => state.selected.has(item.id));
+  }
+
+  function renderBatchTags() {
+    const chosen = selectedMedia();
+    const counts = new Map();
+    chosen.forEach((item) => item.tags.forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1)));
+    const current = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    $("#batch-current-tags").replaceChildren(...(current.length
+      ? current.map(([tag, count]) => {
+        const removing = state.batchRemove.has(tag);
+        return el("button", {
+          type: "button", class: `tag-chip${removing ? " removing" : ""}`,
+          text: `#${tag} ${count} of ${chosen.length}${removing ? " · removing" : ""}`,
+          "aria-pressed": String(removing),
+          onclick: () => { if (removing) state.batchRemove.delete(tag); else state.batchRemove.add(tag); renderBatchTags(); }
+        });
+      })
+      : [el("span", { class: "muted", text: "None of them are tagged yet." })]));
+    $("#batch-add-tags").replaceChildren(...(state.batchAdd.length
+      ? state.batchAdd.map((tag) => el("button", {
+        type: "button", class: "tag-chip active", text: `#${tag} ✕`, "aria-label": `Don't add ${tag}`,
+        onclick: () => { state.batchAdd = state.batchAdd.filter((entry) => entry !== tag); renderBatchTags(); }
+      }))
+      : [el("span", { class: "muted", text: "Nothing yet." })]));
+    const everywhere = new Set(current.filter(([, count]) => count === chosen.length).map(([tag]) => tag));
+    const suggestions = state.tags.map((tag) => tag.name)
+      .filter((name) => !everywhere.has(name) && !state.batchAdd.includes(name)).slice(0, 12);
+    $("#batch-suggestions").replaceChildren(...suggestions.map((name) => el("button", {
+      type: "button", class: "tag-chip", text: `＋ #${name}`, onclick: () => addBatchTags(name)
+    })));
+    $("#batch-suggestions-row").hidden = !suggestions.length;
+  }
+
+  function addBatchTags(text) {
+    for (const tag of text.split(",").map(cleanTag).filter(Boolean)) {
+      if (!state.batchAdd.includes(tag)) state.batchAdd.push(tag);
+      state.batchRemove.delete(tag);
+    }
+    renderBatchTags();
+  }
+
+  function openBatchTags() {
+    if (!state.selected.size) return;
+    state.batchAdd = [];
+    state.batchRemove = new Set();
+    $("#batch-tag-form").reset();
+    $("#batch-tag-title").textContent = `Tag ${state.selected.size} item${state.selected.size === 1 ? "" : "s"}`;
+    renderBatchTags();
+    $("#batch-tag-dialog").showModal();
+  }
+
+  async function saveBatchTags(form) {
+    addBatchTags(form.elements.new_tag.value);
+    if (!state.batchAdd.length && !state.batchRemove.size) throw new Error("Add a tag, or tap one to remove");
+    await send("/api/media/batch-tags", {
+      media_ids: [...state.selected], add: state.batchAdd, remove: [...state.batchRemove]
+    });
+    const parts = [];
+    if (state.batchAdd.length) parts.push(`added ${state.batchAdd.map((tag) => `#${tag}`).join(", ")}`);
+    if (state.batchRemove.size) parts.push(`removed ${[...state.batchRemove].map((tag) => `#${tag}`).join(", ")}`);
+    return `${state.selected.size} item${state.selected.size === 1 ? "" : "s"}: ${parts.join("; ")}.`;
   }
 
   function renderDraftTags() {
@@ -1275,6 +1386,7 @@
     "playlist-form": savePlaylist,
     "item-form": saveItem,
     "media-form": saveMedia,
+    "batch-tag-form": saveBatchTags,
     "text-form": async (form) => {
       const panel = await saveText(form);
       showView("text");
@@ -1314,10 +1426,12 @@
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.target.id !== "media-new-tag") return;
+    const adders = { "media-new-tag": addDraftTags, "batch-new-tag": addBatchTags };
+    const add = adders[event.target.id];
+    if (!add) return;
     if (event.key === "Enter" || event.key === ",") {
       event.preventDefault();
-      addDraftTags(event.target.value);
+      add(event.target.value);
       event.target.value = "";
     }
   });
@@ -1362,6 +1476,14 @@
     },
     "new-playlist": () => openPlaylistDialog(),
     "new-text-panel": () => openTextEditor(),
+    "toggle-select": () => setSelecting(!state.selecting),
+    "select-all": () => { state.visibleMedia.forEach((item) => state.selected.add(item.id)); renderMedia(); },
+    "select-none": () => { state.selected.clear(); renderMedia(); },
+    "selection-tags": () => openBatchTags(),
+    "selection-playlist": () => {
+      const ids = selectedMedia().map((item) => item.id);
+      if (ids.length) openItemDialog({ targetType: "media", targetId: ids[0], targetIds: ids.length > 1 ? ids : undefined });
+    },
     "test-card": async () => {
       try {
         await request("/api/display/test-card", { method: "POST" });

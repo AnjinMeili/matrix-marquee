@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from ..database import Database
 from ..models import MediaType
-from ..schemas import Media, MediaUpdate, TagCount, normalize_tag
+from ..schemas import MAX_TAGS, Media, MediaBatchTags, MediaUpdate, TagCount, normalize_tag
 from ..storage import MediaStorage, StorageFullError
 from .dependencies import get_database, get_storage
 
@@ -142,6 +142,52 @@ def get_media(media_id: int, request: Request, database: Database = Depends(get_
 
 
 REMOVE_UNUSED_TAGS = "DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM media_tags)"
+
+
+@router.post("/batch-tags", response_model=List[Media])
+def batch_tags(
+    body: MediaBatchTags,
+    request: Request,
+    database: Database = Depends(get_database),
+) -> List[Media]:
+    """Adds and removes tags across a selection in one transaction."""
+    ids = list(dict.fromkeys(body.media_ids))
+    current = _tags_for(database, ids)
+    found = {
+        row["id"]
+        for row in database.fetch_all(
+            f"SELECT id FROM media WHERE id IN ({','.join('?' for _ in ids)})", ids
+        )
+    }
+    missing = [media_id for media_id in ids if media_id not in found]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"media not found: {missing[:5]}")
+    removing = set(body.remove)
+    results = {}
+    for media_id in ids:
+        tags = [tag for tag in current[media_id] if tag not in removing]
+        tags += [tag for tag in body.add if tag not in tags and tag not in removing]
+        if len(tags) > MAX_TAGS:
+            raise HTTPException(status_code=422, detail=f"an item would have more than {MAX_TAGS} tags")
+        results[media_id] = tags
+    with database.transaction() as connection:
+        for tag in body.add:
+            connection.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+        for media_id, tags in results.items():
+            connection.execute("DELETE FROM media_tags WHERE media_id = ?", (media_id,))
+            for tag in tags:
+                connection.execute(
+                    "INSERT INTO media_tags (media_id, tag_id) SELECT ?, id FROM tags WHERE name = ?",
+                    (media_id, tag),
+                )
+        connection.execute(REMOVE_UNUSED_TAGS)
+    logger.info(
+        "media_tags_batch_updated",
+        extra={"count": len(ids), "added": len(body.add), "removed": len(body.remove)},
+    )
+    rows = database.fetch_all(f"SELECT * FROM media WHERE id IN ({','.join('?' for _ in ids)})", ids)
+    tags = _tags_for(database, ids)
+    return [_with_status(row, request, tags[row["id"]]) for row in rows]
 
 
 @router.patch("/{media_id}", response_model=Media)

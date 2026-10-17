@@ -264,6 +264,15 @@ dialog form { display: grid; gap: 15px; padding: 19px; }
 .slider input[type="range"] { grid-column: 1 / -1; min-height: 32px; padding: 0; accent-color: var(--accent); background: transparent; border: 0; }
 .quick-brightness { margin-top: 12px; }
 #display-card .button-row { margin-top: 14px; }
+.media-grid.selecting .media-actions { display: none; }
+.media-grid.selecting .media-card { cursor: pointer; }
+.select-check { position: absolute; top: 8px; right: 8px; display: none; place-items: center; width: 28px; height: 28px; color: var(--accent-dark); background: rgba(4,8,13,.7); border: 2px solid var(--text); border-radius: 50%; font-size: 16px; font-weight: 900; }
+.media-grid.selecting .select-check { display: grid; color: transparent; }
+.media-card.selected { outline: 3px solid var(--accent); outline-offset: -3px; }
+.media-grid.selecting .media-card.selected .select-check { color: var(--accent-dark); background: var(--accent); border-color: var(--accent); }
+.selection-bar { position: sticky; bottom: 12px; z-index: 15; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-top: 16px; padding: 10px 12px; background: var(--surface-raised); border: 1px solid var(--line-bright); border-radius: 12px; box-shadow: var(--shadow); }
+.selection-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-chip.removing { color: var(--danger); text-decoration: line-through; border-color: var(--danger); }
 .returned { animation: returned 2.2s ease-out; }
 @keyframes returned { 0%, 45% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 3px transparent; } }
 .run-through { display: grid; gap: 6px; margin-top: 16px; padding: 12px; background: #05080d; border-radius: 10px; }

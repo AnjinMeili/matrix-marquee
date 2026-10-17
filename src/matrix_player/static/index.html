@@ -133,9 +133,20 @@
           <label class="search-field"><span class="sr-only">Search</span><span aria-hidden="true">⌕</span><input id="media-search" type="search" placeholder="Search names and tags" autocomplete="off"></label>
           <label><span class="sr-only">Show only</span><select id="media-filter"><option value="">Everything</option><option value="image">Pictures</option><option value="gif">Animated GIFs</option><option value="video">Videos</option></select></label>
           <span id="media-count" class="muted">0 items</span>
+          <button class="button small" data-action="toggle-select" id="select-toggle" aria-pressed="false">☑ Select</button>
         </div>
         <div id="media-tags" class="tag-filter" aria-label="Filter by tag" hidden></div>
         <div id="media-grid" class="media-grid" aria-live="polite"></div>
+        <div id="selection-bar" class="selection-bar" role="toolbar" aria-label="Selected items" hidden>
+          <strong id="selection-count">0 selected</strong>
+          <div class="selection-actions">
+            <button class="button small" data-action="select-all">Select all</button>
+            <button class="button small" data-action="select-none">Clear</button>
+            <button class="button small primary" data-action="selection-playlist">＋ Add to playlist</button>
+            <button class="button small primary" data-action="selection-tags"># Tags</button>
+            <button class="button small" data-action="toggle-select">Done</button>
+          </div>
+        </div>
       </section>
 
       <section class="view" id="settings" aria-labelledby="settings-title" hidden>
@@ -204,6 +215,26 @@
         <div id="media-tag-suggestions" class="tag-row"></div>
       </div>
       <div class="dialog-actions"><button type="button" class="button" id="media-show-now">▶ Show on sign</button><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Save</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="batch-tag-dialog">
+    <form id="batch-tag-form">
+      <div class="dialog-header"><div><p class="eyebrow">Selected items</p><h2 id="batch-tag-title">Tag selection</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close">×</button></div>
+      <div>
+        <p class="field-label">Tags on the selection <span class="muted">(tap one to remove it from all of them)</span></p>
+        <div id="batch-current-tags" class="tag-row"></div>
+      </div>
+      <div>
+        <p class="field-label">Adding to all of them</p>
+        <div id="batch-add-tags" class="tag-row"></div>
+      </div>
+      <label>Add a tag<input id="batch-new-tag" name="new_tag" maxlength="32" autocomplete="off" enterkeyhint="done" placeholder="e.g. march, funny, night"></label>
+      <div id="batch-suggestions-row">
+        <p class="field-label">Tags you've used</p>
+        <div id="batch-suggestions" class="tag-row"></div>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary" id="batch-tag-submit">Apply</button></div>
     </form>
   </dialog>
 

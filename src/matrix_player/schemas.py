@@ -40,6 +40,21 @@ def normalize_tag(value: str) -> str:
     return " ".join(value.strip().lstrip("#").split()).lower()
 
 
+def clean_tag_list(values: List[str]) -> List[str]:
+    tags: List[str] = []
+    for value in values:
+        tag = normalize_tag(value)
+        if not tag:
+            continue
+        if len(tag) > MAX_TAG_LENGTH:
+            raise ValueError(f"tags must be {MAX_TAG_LENGTH} characters or fewer")
+        if tag not in tags:
+            tags.append(tag)
+    if len(tags) > MAX_TAGS:
+        raise ValueError(f"at most {MAX_TAGS} tags")
+    return tags
+
+
 class MediaUpdate(ApiModel):
     display_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     tags: Optional[List[str]] = None
@@ -57,20 +72,20 @@ class MediaUpdate(ApiModel):
     @field_validator("tags")
     @classmethod
     def clean_tags(cls, values: Optional[List[str]]) -> Optional[List[str]]:
-        if values is None:
-            return None
-        tags: List[str] = []
-        for value in values:
-            tag = normalize_tag(value)
-            if not tag:
-                continue
-            if len(tag) > MAX_TAG_LENGTH:
-                raise ValueError(f"tags must be {MAX_TAG_LENGTH} characters or fewer")
-            if tag not in tags:
-                tags.append(tag)
-        if len(tags) > MAX_TAGS:
-            raise ValueError(f"at most {MAX_TAGS} tags")
-        return tags
+        return None if values is None else clean_tag_list(values)
+
+
+class MediaBatchTags(ApiModel):
+    """Adds and/or removes tags on many pictures and videos at once."""
+
+    media_ids: List[int] = Field(min_length=1, max_length=1000)
+    add: List[str] = Field(default_factory=list)
+    remove: List[str] = Field(default_factory=list)
+
+    @field_validator("add", "remove")
+    @classmethod
+    def clean_tags(cls, values: List[str]) -> List[str]:
+        return clean_tag_list(values)
 
 
 class TagCount(ApiModel):
