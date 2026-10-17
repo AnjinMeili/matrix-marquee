@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import AsyncIterator, Optional
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
@@ -18,6 +18,7 @@ from .playback import (
     DatabasePlaybackController,
     PlaybackController,
     PlaybackService,
+    UnavailablePlaybackController,
 )
 from .routes import captive, media, playback, playlists, system, text_panels
 from .storage import MediaStorage
@@ -79,12 +80,17 @@ def create_app(
                     PlaybackService(adapter), app.state.database, app.state.storage
                 )
                 app.state.matrix_connected = True
-            except Exception:
+                app.state.matrix_error = None
+            except Exception as error:
+                message = f"matrix initialization failed: {error}"
                 logging.getLogger(__name__).exception(
                     "matrix_initialization_failed", extra={"matrix_mode": configured.matrix_mode}
                 )
-                raise
-        if configured.autoplay_default:
+                app.state.matrix = None
+                app.state.matrix_connected = False
+                app.state.matrix_error = message
+                app.state.playback = UnavailablePlaybackController(message)
+        if configured.autoplay_default and app.state.matrix_connected:
             default_playlist = app.state.database.fetch_one(
                 """SELECT id FROM playlists
                    WHERE is_default = 1 AND is_enabled = 1
@@ -103,7 +109,11 @@ def create_app(
                     )
         try:
             logging.getLogger(__name__).info(
-                "application_started", extra={"matrix_mode": configured.matrix_mode}
+                "application_started",
+                extra={
+                    "matrix_mode": configured.matrix_mode,
+                    "matrix_connected": app.state.matrix_connected,
+                },
             )
             yield
         finally:
@@ -128,6 +138,7 @@ def create_app(
     app.state.playback = playback_controller
     app.state.matrix = matrix_adapter
     app.state.matrix_connected = matrix_adapter is not None
+    app.state.matrix_error = None
 
     app.include_router(system.router)
     app.include_router(media.router)
@@ -157,6 +168,12 @@ def create_app(
     @app.get("/health", include_in_schema=False)
     def health() -> dict:
         return {"status": "ok"}
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def captive_fallback(path: str):
+        if path == "api" or path.startswith(("api/", "static/")):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        return RedirectResponse("/", status_code=302)
 
     return app
 

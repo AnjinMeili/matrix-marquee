@@ -8,7 +8,10 @@
     const response = await fetch(path, options);
     if (!response.ok) {
       let detail = response.statusText;
-      try { detail = (await response.json()).detail || detail; } catch (_) {}
+      try {
+        const payload = (await response.json()).detail;
+        detail = typeof payload === "object" && payload?.message ? payload.message : payload || detail;
+      } catch (_) {}
       throw new Error(detail);
     }
     return response.status === 204 ? null : response.json();
@@ -61,7 +64,9 @@
     $("#now-progress").textContent = sending ? "single item" : itemIndex >= 0 ? `${itemIndex + 1} / ${active.items.length}` : "—";
     $("#live-preview").innerHTML = `<div><strong></strong><span></span></div>`;
     $("strong", $("#live-preview")).textContent = playing ? title : "MATRIX";
-    $("span", $("#live-preview")).textContent = playing ? `${status.matrix.width} × ${status.matrix.height}` : "Ready for playback";
+    $("span", $("#live-preview")).textContent = status.matrix.connected
+      ? (playing ? `${status.matrix.width} × ${status.matrix.height}` : "Ready for playback")
+      : "Matrix unavailable";
 
     $("#health-matrix").textContent = status.matrix.connected
       ? `${status.matrix.width} × ${status.matrix.height} connected`
@@ -98,6 +103,7 @@
       ["Resolution", `${status.matrix.width} × ${status.matrix.height}`],
       ["Mode", status.matrix.mode],
       ["Connected", status.matrix.connected ? "Yes" : "No"],
+      ["Error", status.matrix.error || "None"],
       ["Temperature", status.temperature_c == null ? "—" : `${status.temperature_c.toFixed(1)} °C`]
     ]);
     const records = diagnostics.database?.records || {};

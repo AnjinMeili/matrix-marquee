@@ -405,6 +405,52 @@ class PlaybackError(ValueError):
         self.code = code
 
 
+class UnavailablePlaybackController:
+    """Reports a hardware startup failure without taking down the web UI."""
+
+    def __init__(self, message: str = "matrix hardware is unavailable") -> None:
+        self._message = message
+        self._changed_at = datetime.now(timezone.utc)
+
+    def state(self) -> PlaybackState:
+        return PlaybackState(
+            status=PlaybackStatus.ERROR,
+            changed_at=self._changed_at,
+            error=self._message,
+        )
+
+    def _unavailable(self) -> PlaybackState:
+        raise PlaybackError("matrix_unavailable", self._message)
+
+    def start(self, playlist_id: int) -> PlaybackState:
+        return self._unavailable()
+
+    def send_media(
+        self, media_id: int, fit_mode: str = "fit", duration_ms: Optional[int] = None
+    ) -> PlaybackState:
+        return self._unavailable()
+
+    def send_text_panel(
+        self, panel_id: int, duration_ms: Optional[int] = None
+    ) -> PlaybackState:
+        return self._unavailable()
+
+    def release(self) -> PlaybackState:
+        return self._unavailable()
+
+    def pause(self) -> PlaybackState:
+        return self._unavailable()
+
+    def resume(self) -> PlaybackState:
+        return self._unavailable()
+
+    def stop(self) -> PlaybackState:
+        return self._unavailable()
+
+    def close(self) -> None:
+        pass
+
+
 class DatabasePlaybackController:
     """Loads persisted playlists and controls the matrix render worker."""
 

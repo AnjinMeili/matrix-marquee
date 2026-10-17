@@ -54,6 +54,7 @@ def status_endpoint(
             "height": request.app.state.matrix.size[1] if request.app.state.matrix else settings.matrix_height,
             "connected": request.app.state.matrix_connected,
             "mode": settings.matrix_mode,
+            "error": request.app.state.matrix_error,
         },
         "playback": playback.state().model_dump(mode="json"),
         "storage": {

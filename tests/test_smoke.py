@@ -5,6 +5,7 @@ import time
 from fastapi.testclient import TestClient
 from PIL import Image
 
+import matrix_player.app as app_module
 from matrix_player.app import create_app
 from matrix_player.config import Settings
 from matrix_player.matrix import MatrixConfig, MockMatrixAdapter
@@ -34,6 +35,13 @@ def test_health_and_captive_routes(tmp_path: Path) -> None:
         assert "Open PROTEST Matrix Player" in apple.text
         assert client.get("/connecttest.txt", follow_redirects=False).status_code == 302
         assert client.get("/ncsi.txt", follow_redirects=False).status_code == 302
+        fallback = client.get("/some/captive/path", follow_redirects=False)
+        assert fallback.status_code == 302
+        assert fallback.headers["location"] == "/"
+        api_missing = client.get("/api/does-not-exist")
+        assert api_missing.status_code == 404
+        assert api_missing.json() == {"detail": "Not Found"}
+        assert client.get("/static/does-not-exist.js").status_code == 404
         root = client.get("/")
         assert root.status_code == 200
         assert "Matrix Player" in root.text
@@ -62,6 +70,40 @@ def test_health_and_captive_routes(tmp_path: Path) -> None:
         assert client.get("/static/app.js").headers["content-type"].startswith(
             "text/javascript"
         )
+
+
+def test_matrix_initialization_failure_keeps_authoring_available(
+    tmp_path: Path, monkeypatch
+) -> None:
+    settings = replace(make_settings(tmp_path), matrix_mode="hardware")
+
+    def fail_matrix(_settings: Settings):
+        raise RuntimeError("driver unavailable")
+
+    monkeypatch.setattr(app_module, "_create_matrix", fail_matrix)
+
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/health").json() == {"status": "ok"}
+        status = client.get("/api/status").json()
+        assert status["matrix"]["connected"] is False
+        assert status["matrix"]["mode"] == "hardware"
+        assert "driver unavailable" in status["matrix"]["error"]
+        assert status["playback"]["status"] == "error"
+        assert "driver unavailable" in status["playback"]["error"]
+
+        panel = client.post(
+            "/api/text-panels", json={"name": "Offline edit", "content": "READY"}
+        )
+        assert panel.status_code == 201
+        playlist = client.post("/api/playlists", json={"name": "Offline list"})
+        assert playlist.status_code == 201
+
+        start = client.post(
+            "/api/playback/start", json={"playlist_id": playlist.json()["id"]}
+        )
+        assert start.status_code == 409
+        assert start.json()["detail"]["code"] == "matrix_unavailable"
+        assert "driver unavailable" in start.json()["detail"]["message"]
 
 
 def test_playlist_and_text_panel_crud(tmp_path: Path) -> None:
