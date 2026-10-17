@@ -1,0 +1,32 @@
+Project is to create a media player that pushes output to an RGB 
+LED Matrix via the rpi-rgb-led-matrix library.  The project will
+run on a raspberry pi 4 with an attached RGB matrix.
+
+The service will provide a wifi access point with no assumed
+internet connection.  If a cellular phone joins the wifi, and can
+proxy or share an internet connection, the service should be able
+to work with it (assume iphone)
+
+Service will be automated from playlists, or just found media in
+a folder.  
+
+Playlists will have transition type (fade in, fade out,
+rotate in, slide in from any side - pushing out the prior media, 
+and other creative transitions to give the media changes more
+impact and fun.), number of repeats or time to view the media.
+
+Playlists can include simple ascii text that sets a font, 
+transition method, color (solid colors and rainbow/plasma). 
+Border decorations, changing colors, bold and italic... and a 
+selection of effective fonts.
+
+A webui will be setup as a captured portal on the wifi access 
+point.  Webui will allow preview of playlists, viewing any 
+saved media, upload of new media to add to library folder,
+and creation and editing of text panels.
+
+A raspberry pi is available for development tasks via ssh.
+
+
+
+Media can be video, animated gif, or images. 

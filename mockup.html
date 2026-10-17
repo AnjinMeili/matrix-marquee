@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RGB Matrix Player Mockup</title>
+  <style>
+    :root {
+      --bg: #0b0f16;
+      --panel: #121925;
+      --panel-2: #182131;
+      --line: #29364a;
+      --text: #eef3fb;
+      --muted: #8d9bb1;
+      --cyan: #4de1ff;
+      --pink: #ff5c9a;
+      --green: #52e39a;
+      --yellow: #ffd166;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: radial-gradient(circle at 85% 0%, #1b2944 0, var(--bg) 38rem);
+      font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select { font: inherit; }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--text);
+      background: var(--panel-2);
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--cyan); }
+    .primary { color: #061017; background: var(--cyan); border-color: var(--cyan); font-weight: 700; }
+    .danger { color: #ff9fbd; }
+    .app { display: grid; grid-template-columns: 235px 1fr; min-height: 100vh; }
+    aside { padding: 24px 16px; border-right: 1px solid var(--line); background: rgba(9, 14, 23, .84); }
+    .brand { display: flex; gap: 10px; align-items: center; margin-bottom: 34px; font-weight: 800; letter-spacing: .03em; }
+    .brand-mark { width: 27px; height: 27px; border-radius: 7px; background: conic-gradient(var(--pink), var(--yellow), var(--green), var(--cyan), var(--pink)); }
+    nav button { width: 100%; text-align: left; border: 0; background: transparent; color: var(--muted); margin: 3px 0; }
+    nav button.active, nav button:hover { color: var(--text); background: var(--panel-2); }
+    .side-status { margin-top: 38px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; }
+    main { width: min(1200px, 100%); padding: 28px clamp(18px, 4vw, 52px); }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 26px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 4px; font-size: clamp(25px, 4vw, 34px); }
+    .subtitle, .muted { color: var(--muted); }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, .8fr); gap: 18px; }
+    .card { padding: 20px; background: rgba(18, 25, 37, .92); border: 1px solid var(--line); border-radius: 13px; }
+    .card h2 { font-size: 17px; margin-bottom: 17px; }
+    .matrix-wrap { padding: 24px; border-radius: 10px; background: #06090e; }
+    .matrix { aspect-ratio: 16 / 9; display: grid; place-items: center; border: 7px solid #202b3b; border-radius: 4px; background: radial-gradient(circle at 25% 30%, #ff5c9a, transparent 22%), linear-gradient(135deg, #26134e, #073e67 52%, #082d2a); box-shadow: 0 0 28px rgba(77, 225, 255, .18); text-align: center; }
+    .matrix strong { font-size: clamp(23px, 4vw, 47px); letter-spacing: .08em; text-shadow: 0 0 18px #fff; }
+    .matrix small { display: block; color: #d4f9ff; margin-top: 8px; }
+    .transport { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 15px; }
+    .transport .playing { color: var(--green); font-weight: 700; }
+    .metric-list { display: grid; gap: 12px; }
+    .metric { display: flex; justify-content: space-between; gap: 15px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .metric:last-child { border-bottom: 0; padding-bottom: 0; }
+    .metric span:first-child { color: var(--muted); }
+    .wide { grid-column: 1 / -1; }
+    .playlist-row, .library-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+    .playlist-row:last-child, .library-row:last-child { border-bottom: 0; }
+    .item-title { font-weight: 650; }
+    .tag { color: var(--cyan); font-size: 12px; background: rgba(77, 225, 255, .1); border-radius: 5px; padding: 4px 7px; }
+    .thumb { width: 58px; height: 36px; border-radius: 5px; background: linear-gradient(135deg, #ff5c9a, #4de1ff); }
+    .library-row { grid-template-columns: 58px 1fr auto; }
+    .form-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
+    input, select, textarea { width: 100%; padding: 10px; color: var(--text); border: 1px solid var(--line); border-radius: 7px; background: #0c131f; }
+    textarea { min-height: 80px; resize: vertical; }
+    @media (max-width: 780px) {
+      .app { display: block; }
+      aside { border-right: 0; border-bottom: 1px solid var(--line); padding: 14px 18px; }
+      .brand { margin-bottom: 12px; }
+      nav { display: flex; overflow: auto; gap: 5px; }
+      nav button { white-space: nowrap; width: auto; }
+      .side-status { display: none; }
+      main { padding: 22px 16px; }
+      header { align-items: flex-start; flex-direction: column; }
+      .grid { grid-template-columns: 1fr; }
+      .wide { grid-column: auto; }
+      .playlist-row { grid-template-columns: 1fr auto; }
+      .playlist-row .tag { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand"><span class="brand-mark"></span> MATRIX PLAYER</div>
+      <nav aria-label="Main navigation">
+        <button class="active">Dashboard</button>
+        <button>Playlists</button>
+        <button>Library</button>
+        <button>Text panels</button>
+        <button>Settings</button>
+      </nav>
+      <div class="side-status"><span class="dot"></span> Access point online<br><br>Matrix: 64 x 32 RGB<br>Offline mode ready</div>
+    </aside>
+    <main>
+      <header>
+        <div>
+          <h1>Good evening, operator</h1>
+          <div class="subtitle">Your matrix is running the <strong>Welcome Loop</strong>.</div>
+        </div>
+        <div class="actions">
+          <button>Preview playlist</button>
+          <button class="primary">+ Add media</button>
+        </div>
+      </header>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Live output</h2>
+          <div class="matrix-wrap">
+            <div class="matrix" role="img" aria-label="Matrix preview showing Welcome">
+              <div><strong>WELCOME</strong><small>to the party</small></div>
+            </div>
+            <div class="transport">
+              <span class="playing"><span class="dot"></span> Playing · item 2 of 6</span>
+              <div class="actions"><button aria-label="Pause">||</button><button class="danger">Stop</button></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>System health</h2>
+          <div class="metric-list">
+            <div class="metric"><span>Temperature</span><strong>48 C</strong></div>
+            <div class="metric"><span>Storage</span><strong>31% used</strong></div>
+            <div class="metric"><span>Brightness</span><strong>70%</strong></div>
+            <div class="metric"><span>Network</span><strong style="color:var(--green)">AP online</strong></div>
+            <div class="metric"><span>Upstream internet</span><strong class="muted">Not connected</strong></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>Current playlist <span class="tag">AUTOPLAY</span></h2>
+          <div class="playlist-row"><div><div class="item-title">Sunset.jpg</div><div class="muted">8 seconds · Fade in</div></div><span class="tag">IMAGE</span><button>...</button></div>
+          <div class="playlist-row"><div><div class="item-title">Welcome panel</div><div class="muted">5 seconds · Slide left</div></div><span class="tag">TEXT</span><button>...</button></div>
+          <div class="playlist-row"><div><div class="item-title">Fireworks.gif</div><div class="muted">2 repeats · Cut</div></div><span class="tag">GIF</span><button>...</button></div>
+          <div class="actions" style="margin-top:16px"><button>Open editor</button><button>Change playlist</button></div>
+        </article>
+
+        <article class="card">
+          <h2>Quick text panel</h2>
+          <div class="form-row">
+            <label>Message<input value="WELCOME"></label>
+            <label>Color<select><option>Rainbow</option><option>Solid white</option><option>Plasma</option></select></label>
+          </div>
+          <div class="form-row" style="margin-top:12px">
+            <label>Font<select><option>Pixel Sans Bold</option><option>Matrix Mono</option><option>Block Display</option></select></label>
+            <label>Border<select><option>Neon corners</option><option>Solid</option><option>None</option></select></label>
+          </div>
+          <button class="primary" style="margin-top:16px">Save text panel</button>
+        </article>
+
+        <article class="card wide">
+          <h2>Recently added <span class="muted">· Library</span></h2>
+          <div class="library-row"><div class="thumb"></div><div><div class="item-title">summer-party.mp4</div><div class="muted">Video · 00:18 · 12.4 MB</div></div><button>Add to playlist</button></div>
+          <div class="library-row"><div class="thumb" style="background:linear-gradient(135deg,#ffd166,#ff5c9a)"></div><div><div class="item-title">confetti.gif</div><div class="muted">Animated GIF · 640 x 360 · 2.1 MB</div></div><button>Add to playlist</button></div>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
