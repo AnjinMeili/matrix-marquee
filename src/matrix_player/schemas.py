@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .models import FitMode, ItemType, MediaType, PlaybackStatus, PlayBy, PlayMode, TransitionType
 from .rendering.text import FONT_ALIASES, FONTS
@@ -26,8 +26,56 @@ class Media(ApiModel):
     file_size_bytes: int
     thumbnail_path: Optional[str] = None
     preparing: bool = False  # video still being converted for the sign
+    tags: List[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+
+MAX_TAGS = 20
+MAX_TAG_LENGTH = 32
+
+
+def normalize_tag(value: str) -> str:
+    """Tags are short lowercase labels: '#March ' and 'march' are the same tag."""
+    return " ".join(value.strip().lstrip("#").split()).lower()
+
+
+class MediaUpdate(ApiModel):
+    display_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    tags: Optional[List[str]] = None
+
+    @field_validator("display_name")
+    @classmethod
+    def clean_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("name cannot be blank")
+        return cleaned
+
+    @field_validator("tags")
+    @classmethod
+    def clean_tags(cls, values: Optional[List[str]]) -> Optional[List[str]]:
+        if values is None:
+            return None
+        tags: List[str] = []
+        for value in values:
+            tag = normalize_tag(value)
+            if not tag:
+                continue
+            if len(tag) > MAX_TAG_LENGTH:
+                raise ValueError(f"tags must be {MAX_TAG_LENGTH} characters or fewer")
+            if tag not in tags:
+                tags.append(tag)
+        if len(tags) > MAX_TAGS:
+            raise ValueError(f"at most {MAX_TAGS} tags")
+        return tags
+
+
+class TagCount(ApiModel):
+    name: str
+    count: int
 
 
 FONT_PATTERN = "^({})$".format("|".join(list(FONTS) + list(FONT_ALIASES)))

@@ -123,10 +123,11 @@
           <button class="button primary" data-action="open-upload">＋ Add from phone</button>
         </header>
         <div class="toolbar card">
-          <label class="search-field"><span class="sr-only">Search</span><span aria-hidden="true">⌕</span><input id="media-search" type="search" placeholder="Search" autocomplete="off"></label>
+          <label class="search-field"><span class="sr-only">Search</span><span aria-hidden="true">⌕</span><input id="media-search" type="search" placeholder="Search names and tags" autocomplete="off"></label>
           <label><span class="sr-only">Show only</span><select id="media-filter"><option value="">Everything</option><option value="image">Pictures</option><option value="gif">Animated GIFs</option><option value="video">Videos</option></select></label>
           <span id="media-count" class="muted">0 items</span>
         </div>
+        <div id="media-tags" class="tag-filter" aria-label="Filter by tag" hidden></div>
         <div id="media-grid" class="media-grid" aria-live="polite"></div>
       </section>
 
@@ -138,6 +139,7 @@
         <div class="settings-grid">
           <article class="card"><div class="card-heading"><div><p class="eyebrow">Connection</p><h2>Network</h2></div><span class="status-dot" id="settings-network-dot"></span></div><dl class="metrics" id="network-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl></article>
           <article class="card"><p class="eyebrow">Hardware</p><h2>Matrix profile</h2><dl class="metrics" id="matrix-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl><p class="form-help">Hardware configuration is managed on the appliance.</p></article>
+          <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Safekeeping</p><h2>Back up everything</h2></div></div><p>Saves every message, playlist, tag, picture, and video on the sign into one <b>.zip</b> file on this device.</p><p class="form-help" id="backup-estimate">Working out the size…</p><div class="button-row"><a class="button primary" id="backup-link" href="/api/backup" download>⇩ Download backup</a></div><p class="form-help">On iPhone, open this page in Safari (not the Wi-Fi sign-in pop-up) so the file can be saved to Files. Passwords are never included.</p></article>
           <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Support</p><h2>Diagnostics</h2></div></div><div id="diagnostic-summary" class="diagnostic-box">Checking services…</div><div class="button-row"><button class="button" data-action="copy-diagnostics">Copy summary</button><a class="button" href="/api/diagnostics/logs" download>Download log bundle</a></div><p class="form-help">Log bundles leave out passwords, message text, and file names.</p></article>
         </div>
       </section>
@@ -150,6 +152,26 @@
       <label class="drop-zone" for="media-files"><span class="drop-icon">⇧</span><strong>Choose photos or videos</strong><span>Pictures, animated GIFs, or videos</span><input id="media-files" name="files" type="file" accept="image/*,video/*" multiple required></label>
       <div id="upload-files" class="upload-list muted">Nothing chosen yet</div>
       <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Close</button><button type="submit" class="button primary">Upload</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="media-dialog">
+    <form id="media-form">
+      <div class="dialog-header"><div><p class="eyebrow">Picture or video</p><h2>Name &amp; tags</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close">×</button></div>
+      <div id="media-dialog-thumb" class="media-dialog-thumb"></div>
+      <p class="form-help item-info" id="media-dialog-info"></p>
+      <label>Name<input name="display_name" maxlength="255" required></label>
+      <div>
+        <p class="field-label">Tags</p>
+        <div id="media-tag-list" class="tag-row"></div>
+      </div>
+      <label>Add a tag<input id="media-new-tag" name="new_tag" maxlength="32" autocomplete="off" enterkeyhint="done" placeholder="e.g. march, funny, night"></label>
+      <p class="form-help">Short words that help you find and group things. Press return or type a comma after each.</p>
+      <div id="media-tag-suggestions-row">
+        <p class="field-label">Tags you've used</p>
+        <div id="media-tag-suggestions" class="tag-row"></div>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Save</button></div>
     </form>
   </dialog>
 
@@ -186,6 +208,7 @@
       </div>
       <fieldset class="timing" id="item-timing">
         <legend>How long</legend>
+        <p class="form-help item-info" id="item-media-info" hidden></p>
         <label class="radio"><input type="radio" name="play_by" value="time" checked> Show for <input name="duration" type="number" min="0.5" max="3600" step="0.5" value="6" inputmode="decimal" class="inline-number"> seconds</label>
         <label class="radio" id="item-repeats-row"><input type="radio" name="play_by" value="repeats"> Play the animation <input name="repeats" type="number" min="1" max="999" value="1" inputmode="numeric" class="inline-number"> time(s)</label>
       </fieldset>

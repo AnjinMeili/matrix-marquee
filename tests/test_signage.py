@@ -1,6 +1,7 @@
 """Playback timing, play modes, resume, item-level errors, and sign text rendering."""
 
 from io import BytesIO
+import json
 from pathlib import Path
 import shutil
 import sqlite3
@@ -502,3 +503,137 @@ def test_run_through_pages_and_survives_a_missing_file(tmp_path: Path) -> None:
         assert page.status_code == 200
         assert gif_seconds(page.content) < gif_seconds(whole.content)
         assert client.get(f"/api/playlists/{playlist['id']}/run-through?start=10").status_code == 404
+
+
+def test_media_tags_rename_search_and_group(tmp_path: Path) -> None:
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=MockMatrixAdapter())) as client:
+        ids = [
+            client.post("/api/media", files={"file": (f"IMG_{n}.png", png_bytes(color), "image/png")}).json()["id"]
+            for n, color in ((1, "red"), (2, "green"), (3, "blue"))
+        ]
+        first = client.patch(f"/api/media/{ids[0]}", json={"display_name": "  Crowd   shot ", "tags": ["#March", "night", "march", " "]})
+        assert first.status_code == 200
+        assert first.json()["display_name"] == "Crowd shot"
+        assert first.json()["tags"] == ["march", "night"]
+        client.patch(f"/api/media/{ids[1]}", json={"tags": ["march"]})
+
+        assert [tag["name"] for tag in client.get("/api/media/tags").json()] == ["march", "night"]
+        assert client.get("/api/media/tags").json()[0]["count"] == 2
+        grouped = {item["id"] for item in client.get("/api/media", params={"tag": "#March"}).json()}
+        assert grouped == {ids[0], ids[1]}
+        searched = {item["id"] for item in client.get("/api/media", params={"query": "nig"}).json()}
+        assert searched == {ids[0]}
+        assert client.get(f"/api/media/{ids[2]}").json()["tags"] == []
+
+        # Renaming alone leaves tags; clearing tags drops tags nobody uses.
+        assert client.patch(f"/api/media/{ids[0]}", json={"display_name": "Crowd"}).json()["tags"] == ["march", "night"]
+        client.patch(f"/api/media/{ids[0]}", json={"tags": []})
+        assert [tag["name"] for tag in client.get("/api/media/tags").json()] == ["march"]
+        client.delete(f"/api/media/{ids[1]}")
+        assert client.get("/api/media/tags").json() == []
+
+        assert client.patch(f"/api/media/{ids[0]}", json={"tags": ["x" * 33]}).status_code == 422
+        assert client.patch(f"/api/media/{ids[0]}", json={"display_name": "   "}).status_code == 422
+        assert client.patch("/api/media/9999", json={"tags": ["a"]}).status_code == 404
+
+
+def test_backup_downloads_everything_except_secrets_and_proxies(tmp_path: Path, monkeypatch) -> None:
+    import zipfile
+
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=MockMatrixAdapter())) as client:
+        media = client.post("/api/media", files={"file": ("photo.png", png_bytes(), "image/png")}).json()
+        client.patch(f"/api/media/{media['id']}", json={"tags": ["march"]})
+        panel = add_panel(client, "NO KINGS")
+        playlist = client.post("/api/playlists", json={"name": "Keep"}).json()
+        add_item(client, playlist["id"], item_type="text_panel", text_panel_id=panel["id"])
+        (tmp_path / "media" / "abc.play.mp4").write_bytes(b"proxy")
+        (tmp_path / "media" / ".upload-123").write_bytes(b"partial")
+        (tmp_path / "protest.env").write_text("SECRET=1")
+
+        estimate = client.get("/api/diagnostics").json()["backup_estimate_bytes"]
+        assert estimate > 0
+        response = client.get("/api/backup")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/zip"
+        assert "protest-backup-" in response.headers["content-disposition"]
+
+        archive = tmp_path / "downloaded.zip"
+        archive.write_bytes(response.content)
+        with zipfile.ZipFile(archive) as bundle:
+            names = set(bundle.namelist())
+            manifest = json.loads(bundle.read("protest-backup/manifest.json"))
+            bundle.extract("protest-backup/database/db.sqlite3", tmp_path / "out")
+        assert f"protest-backup/media/{media['filename']}" in names
+        assert f"protest-backup/thumbnails/{media['thumbnail_path']}" in names
+        assert "protest-backup/README.txt" in names
+        assert not any(name.endswith((".play.mp4", ".env")) or ".upload-" in name for name in names)
+        assert manifest["counts"]["text_panels"] == 1 and manifest["counts"]["tags"] == 1
+
+        restored = sqlite3.connect(tmp_path / "out" / "protest-backup" / "database" / "db.sqlite3")
+        assert restored.execute("SELECT content FROM text_panels").fetchone()[0] == "NO KINGS"
+        restored.close()
+        assert not list(tmp_path.glob(".protest-backup-*.zip"))
+        assert not list(tmp_path.glob(".backup-*"))
+
+        import matrix_player.backup as backup_module
+
+        monkeypatch.setattr(backup_module.shutil, "disk_usage", lambda _path: shutil._ntuple_diskusage(10, 10, 0))
+        assert client.get("/api/backup").status_code == 507
+
+
+def gif_bytes(delays: List[int]) -> bytes:
+    """A GIF with one frame per delay (ms); a single delay makes a one-frame GIF."""
+    # Visibly different frames: the GIF encoder merges identical consecutive ones.
+    frames = [Image.new("RGB", (40, 30), (index * 90 % 256, 255 - index * 70 % 256, 40)) for index in range(len(delays))]
+    output = BytesIO()
+    frames[0].save(output, format="GIF", save_all=len(frames) > 1, append_images=frames[1:],
+                   duration=delays if len(delays) > 1 else delays[0], loop=0, disposal=1)
+    return output.getvalue()
+
+
+def test_gif_uploads_are_checked_for_animation(tmp_path: Path) -> None:
+    from matrix_player.playback import build_media_source
+    from matrix_player.rendering import GifFrameSource, ImageFrameSource
+
+    with TestClient(create_app(make_settings(tmp_path), matrix_adapter=MockMatrixAdapter())) as client:
+        still = client.post("/api/media", files={"file": ("still.gif", gif_bytes([50]), "image/gif")}).json()
+        moving = client.post("/api/media", files={"file": ("moving.gif", gif_bytes([50, 10, 200]), "image/gif")}).json()
+        assert (still["media_type"], still["duration_ms"], still["mime_type"]) == ("image", None, "image/gif")
+        assert moving["media_type"] == "gif"
+        assert moving["duration_ms"] == 350  # the 10 ms delay counts as 100 ms, like browsers
+
+        storage = client.app.state.storage
+        assert isinstance(build_media_source(storage, still["filename"], (96, 64), 6.0, "fit", "image"), ImageFrameSource)
+        assert isinstance(build_media_source(storage, moving["filename"], (96, 64), 6.0, "fit", "gif"), GifFrameSource)
+        assert {item["id"] for item in client.get("/api/media", params={"type": "gif"}).json()} == {moving["id"]}
+
+
+def test_existing_gifs_are_rechecked_once_at_startup(tmp_path: Path) -> None:
+    from matrix_player.maintenance import GIF_CHECK_MARKER
+
+    settings = make_settings(tmp_path)
+    settings.ensure_directories()
+    (settings.media_dir / "still.gif").write_bytes(gif_bytes([50]))
+    (settings.media_dir / "moving.gif").write_bytes(gif_bytes([100, 100]))
+    database = Database(settings.database_path)
+    database.initialize()
+    with database.transaction() as connection:
+        for name, wrong_ms in (("still.gif", 50), ("moving.gif", 999)):
+            connection.execute(
+                """INSERT INTO media (filename, display_name, media_type, mime_type, duration_ms, file_size_bytes)
+                   VALUES (?, ?, 'gif', 'image/gif', ?, 1)""",
+                (name, name, wrong_ms),
+            )
+
+    def types() -> dict:
+        return {row["filename"]: (row["media_type"], row["duration_ms"]) for row in database.fetch_all("SELECT * FROM media")}
+
+    with TestClient(create_app(settings, matrix_adapter=MockMatrixAdapter())):
+        assert wait_for(lambda: (settings.data_dir / GIF_CHECK_MARKER).exists())
+    assert types() == {"still.gif": ("image", None), "moving.gif": ("gif", 200)}
+
+    with database.transaction() as connection:
+        connection.execute("UPDATE media SET media_type = 'gif' WHERE filename = 'still.gif'")
+    with TestClient(create_app(settings, matrix_adapter=MockMatrixAdapter())):
+        time.sleep(0.3)
+    assert types()["still.gif"][0] == "gif"  # the check does not repeat once done

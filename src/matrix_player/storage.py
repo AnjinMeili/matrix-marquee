@@ -13,7 +13,7 @@ from typing import Optional, Tuple
 
 from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageSequence, UnidentifiedImageError
 
 from .config import Settings
 from .models import MediaType
@@ -45,6 +45,22 @@ logger = logging.getLogger(__name__)
 
 class StorageFullError(ValueError):
     pass
+
+
+def gif_animation(image: Image.Image) -> Optional[Tuple[int, float]]:
+    """(loop length in ms, average frames per second) for an animated GIF, or None
+    when it has a single frame and is really a still picture.
+
+    Delays under 20 ms count as 100 ms, matching browsers and the player."""
+    if not getattr(image, "is_animated", False):
+        return None
+    total = 0
+    frames = 0
+    for frame in ImageSequence.Iterator(image):
+        delay = int(frame.info.get("duration", 0) or 0)
+        total += delay if delay >= 20 else 100
+        frames += 1
+    return total, (frames * 1000.0 / total if total else None)
 
 
 @dataclass(frozen=True)
@@ -104,7 +120,7 @@ class MediaStorage:
             filename = f"{digest.hexdigest()}{extension}"
             destination = self.settings.media_dir / filename
             staging.replace(destination)
-            width, height, duration_ms, frame_rate, thumbnail = await run_in_threadpool(
+            media_type, width, height, duration_ms, frame_rate, thumbnail = await run_in_threadpool(
                 self._inspect, destination, media_type, digest.hexdigest()
             )
             return StoredMedia(
@@ -117,24 +133,26 @@ class MediaStorage:
 
     def _inspect(
         self, path: Path, media_type: MediaType, digest: str
-    ) -> Tuple[Optional[int], Optional[int], Optional[int], Optional[float], Optional[str]]:
+    ) -> Tuple[MediaType, Optional[int], Optional[int], Optional[int], Optional[float], Optional[str]]:
+        """Returns the real media type (a one-frame GIF is a still picture) and metadata."""
         if media_type == MediaType.VIDEO:
-            return self._inspect_video(path, digest)
+            return (media_type,) + self._inspect_video(path, digest)
         try:
             with Image.open(path) as image:
                 width, height = image.size
                 duration = None
                 frame_rate = None
                 if media_type == MediaType.GIF:
-                    frames = getattr(image, "n_frames", 1)
-                    frame_duration = int(image.info.get("duration", 100))
-                    duration = frames * frame_duration
-                    frame_rate = 1000.0 / frame_duration if frame_duration else None
+                    animation = gif_animation(image)
+                    if animation is None:
+                        media_type = MediaType.IMAGE
+                    else:
+                        duration, frame_rate = animation
                 image.seek(0)
                 image.thumbnail((256, 256))
                 thumb_name = f"{digest}.png"
                 image.convert("RGB").save(self.settings.thumbnail_dir / thumb_name, "PNG")
-                return width, height, duration, frame_rate, thumb_name
+                return media_type, width, height, duration, frame_rate, thumb_name
         except (UnidentifiedImageError, OSError) as error:
             path.unlink(missing_ok=True)
             raise ValueError("uploaded file is not a valid image") from error

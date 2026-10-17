@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 import sqlite3
-from typing import List, Optional
+from typing import Dict, Iterable, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from ..database import Database
 from ..models import MediaType
-from ..schemas import Media
+from ..schemas import Media, MediaUpdate, TagCount, normalize_tag
 from ..storage import MediaStorage, StorageFullError
 from .dependencies import get_database, get_storage
 
@@ -20,11 +20,31 @@ router = APIRouter(prefix="/api/media", tags=["media"])
 logger = logging.getLogger(__name__)
 
 
-def _with_status(row: object, request: Request) -> Media:
+def _tags_for(database: Database, media_ids: Iterable[int]) -> Dict[int, List[str]]:
+    ids = list(media_ids)
+    tags: Dict[int, List[str]] = {media_id: [] for media_id in ids}
+    if not ids:
+        return tags
+    rows = database.fetch_all(
+        f"""SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id
+            WHERE mt.media_id IN ({','.join('?' for _ in ids)}) ORDER BY t.name""",
+        ids,
+    )
+    for row in rows:
+        tags[row["media_id"]].append(row["name"])
+    return tags
+
+
+def _with_status(row: object, request: Request, tags: Optional[List[str]] = None) -> Media:
     media = Media.model_validate(dict(row))
+    media.tags = tags or []
     if media.media_type == MediaType.VIDEO:
         media.preparing = request.app.state.proxies.is_pending(media.filename)
     return media
+
+
+TAGGED_WITH = """id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id
+                       WHERE {condition})"""
 
 
 @router.get("", response_model=List[Media])
@@ -32,20 +52,41 @@ def list_media(
     request: Request,
     media_type: Optional[MediaType] = Query(default=None, alias="type"),
     query: Optional[str] = Query(default=None, max_length=200),
+    tag: Optional[str] = Query(default=None, max_length=64),
     database: Database = Depends(get_database),
 ) -> List[Media]:
     clauses = []
-    parameters = []
+    parameters: List[object] = []
     if media_type:
         clauses.append("media_type = ?")
         parameters.append(media_type.value)
     if query:
-        clauses.append("display_name LIKE ? ESCAPE '\\'")
-        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        parameters.append(f"%{escaped}%")
+        # Search matches names and tags, so a tag works as a search word.
+        escaped = query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
+        clauses.append(
+            "(display_name LIKE ? ESCAPE '\\' OR "
+            + TAGGED_WITH.format(condition="t.name LIKE ? ESCAPE '\\'")
+            + ")"
+        )
+        parameters += [pattern, pattern.lower()]
+    if tag:
+        clauses.append(TAGGED_WITH.format(condition="t.name = ?"))
+        parameters.append(normalize_tag(tag))
     where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = database.fetch_all(f"SELECT * FROM media{where} ORDER BY created_at DESC, id DESC", parameters)
-    return [_with_status(row, request) for row in rows]
+    tags = _tags_for(database, (row["id"] for row in rows))
+    return [_with_status(row, request, tags[row["id"]]) for row in rows]
+
+
+@router.get("/tags", response_model=List[TagCount])
+def list_tags(database: Database = Depends(get_database)) -> List[TagCount]:
+    """Tags in use, most used first, for grouping chips in the library."""
+    rows = database.fetch_all(
+        """SELECT t.name, COUNT(*) AS count FROM tags t JOIN media_tags mt ON mt.tag_id = t.id
+           GROUP BY t.id ORDER BY count DESC, t.name"""
+    )
+    return [TagCount(name=row["name"], count=row["count"]) for row in rows]
 
 
 @router.post("", response_model=Media, status_code=status.HTTP_201_CREATED)
@@ -93,8 +134,46 @@ def _get_media(media_id: int, database: Database) -> Media:
 
 
 @router.get("/{media_id}", response_model=Media)
-def get_media(media_id: int, database: Database = Depends(get_database)) -> Media:
-    return _get_media(media_id, database)
+def get_media(media_id: int, request: Request, database: Database = Depends(get_database)) -> Media:
+    row = database.fetch_one("SELECT * FROM media WHERE id = ?", (media_id,))
+    if row is None:
+        raise HTTPException(status_code=404, detail="media not found")
+    return _with_status(row, request, _tags_for(database, [media_id])[media_id])
+
+
+REMOVE_UNUSED_TAGS = "DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM media_tags)"
+
+
+@router.patch("/{media_id}", response_model=Media)
+def update_media(
+    media_id: int,
+    body: MediaUpdate,
+    request: Request,
+    database: Database = Depends(get_database),
+) -> Media:
+    """Renames media and/or replaces its tags; omitted fields are left alone."""
+    _get_media(media_id, database)
+    with database.transaction() as connection:
+        if body.display_name is not None:
+            connection.execute(
+                "UPDATE media SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (body.display_name, media_id),
+            )
+        if body.tags is not None:
+            connection.execute("DELETE FROM media_tags WHERE media_id = ?", (media_id,))
+            for tag in body.tags:
+                connection.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+                connection.execute(
+                    """INSERT INTO media_tags (media_id, tag_id)
+                       SELECT ?, id FROM tags WHERE name = ?""",
+                    (media_id, tag),
+                )
+            connection.execute(REMOVE_UNUSED_TAGS)
+    logger.info(
+        "media_updated",
+        extra={"media_id": media_id, "tag_count": len(body.tags) if body.tags is not None else None},
+    )
+    return get_media(media_id, request, database)
 
 
 @router.get("/{media_id}/content", response_class=FileResponse)
@@ -151,6 +230,8 @@ def delete_media(
         raise HTTPException(
             status_code=409, detail="media is used by a playlist or as a text background"
         ) from error
+    with database.transaction() as connection:
+        connection.execute(REMOVE_UNUSED_TAGS)
     storage.delete(media.filename, media.thumbnail_path)
     logger.info("media_deleted", extra={"media_id": media_id})
 

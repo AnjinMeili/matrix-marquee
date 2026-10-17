@@ -1,6 +1,7 @@
 """Operational status, network, and diagnostics endpoints."""
 
 from datetime import datetime, timezone
+import logging
 import os
 from pathlib import Path
 import re
@@ -10,8 +11,11 @@ import subprocess
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, PlainTextResponse
+from starlette.background import BackgroundTask
 
+from ..backup import BackupBusyError, BackupSpaceError, create_backup, estimate_bytes
 from ..config import Settings
 from ..database import Database
 from ..playback import PlaybackController
@@ -19,6 +23,7 @@ from .dependencies import get_database, get_playback, get_settings
 
 
 router = APIRouter(prefix="/api", tags=["system"])
+logger = logging.getLogger(__name__)
 
 
 def _temperature() -> Optional[float]:
@@ -108,6 +113,7 @@ def diagnostics_endpoint(
         },
         "process": {"pid": os.getpid(), "load_average": load_average},
         "temperature_c": _temperature(),
+        "backup_estimate_bytes": estimate_bytes(settings),
     }
 
 
@@ -144,4 +150,27 @@ def diagnostics_logs() -> PlainTextResponse:
             "Content-Disposition": f'attachment; filename="protest-logs-{stamp}.txt"',
             "Cache-Control": "no-store",
         },
+    )
+
+
+@router.get("/backup")
+async def download_backup(
+    request: Request, settings: Settings = Depends(get_settings)
+) -> FileResponse:
+    """Packages everything on the sign into one zip that the requesting device saves."""
+    matrix = request.app.state.matrix
+    size = tuple(matrix.size) if matrix is not None else (settings.matrix_width, settings.matrix_height)
+    try:
+        backup = await run_in_threadpool(create_backup, settings, size)
+    except BackupBusyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except BackupSpaceError as error:
+        raise HTTPException(status_code=507, detail=str(error)) from error
+    logger.info("backup_created", extra={"size_bytes": backup.size_bytes, "counts": backup.counts})
+    return FileResponse(
+        backup.path,
+        media_type="application/zip",
+        filename=backup.filename,
+        headers={"Cache-Control": "no-store"},
+        background=BackgroundTask(backup.path.unlink, missing_ok=True),
     )

@@ -665,6 +665,7 @@ def build_media_source(
     size: tuple,
     duration: float,
     fit_mode: str,
+    media_type: Optional[str] = None,
 ) -> FrameSource:
     if not filename:
         raise PlaybackError("media_not_found", "media record is missing")
@@ -672,7 +673,8 @@ def build_media_source(
     if not path.is_file():
         raise PlaybackError("media_file_missing", "media file is missing")
     suffix = path.suffix.lower()
-    if suffix == ".gif":
+    # A one-frame GIF is stored as a still picture and is held like one.
+    if suffix == ".gif" and media_type != "image":
         return GifFrameSource(path, size, fit_mode)
     if suffix in VIDEO_SUFFIXES:
         return VideoFrameSource(storage.playable_path(filename), size, fit_mode=fit_mode)
@@ -735,11 +737,11 @@ class DatabasePlaybackController:
         return Transition.CUT if value == "none" else Transition(value)
 
     def _media_builder(
-        self, filename: Optional[str], duration: float, fit_mode: str
+        self, filename: Optional[str], duration: float, fit_mode: str, media_type: Optional[str] = None
     ) -> Callable[[], FrameSource]:
         """Defers file checks to play time so one missing file only skips its item."""
         return lambda: build_media_source(
-            self.storage, filename, self.service.matrix.size, duration, fit_mode
+            self.storage, filename, self.service.matrix.size, duration, fit_mode, media_type
         )
 
     def _text_builder(self, row: Mapping[str, object], duration: float) -> Callable[[], FrameSource]:
@@ -767,7 +769,7 @@ class DatabasePlaybackController:
             duration = row["duration_ms"] / 1000.0
             play_by = row["play_by"] or PlayBy.TIME.value
             if row["item_type"] == ItemType.MEDIA.value:
-                source = self._media_builder(row["filename"], duration, row["fit_mode"])
+                source = self._media_builder(row["filename"], duration, row["fit_mode"], row["media_type"])
                 label = row["media_name"]
                 if row["media_type"] == "image":
                     play_by = PlayBy.TIME.value
@@ -884,7 +886,7 @@ class DatabasePlaybackController:
         if row is None:
             raise PlaybackError("media_not_found", "media not found")
         duration = (duration_ms or DEFAULT_SEND_DURATION_MS) / 1000.0
-        source = self._media_builder(row["filename"], duration, fit_mode)()
+        source = self._media_builder(row["filename"], duration, fit_mode, row["media_type"])()
         # Stills hold for the duration; animations play whole loops back to back.
         play_by = PlayBy.TIME.value if row["media_type"] == "image" else PlayBy.REPEATS.value
         self._send(source, duration, "media", row["display_name"], play_by)

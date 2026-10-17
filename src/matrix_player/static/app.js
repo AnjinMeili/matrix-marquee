@@ -4,7 +4,8 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const state = {
     playlists: [], media: [], panels: [], fonts: [], status: null, network: null,
-    selectedPlaylist: null, selectedPanel: null, itemContext: null, editingPanel: null
+    selectedPlaylist: null, selectedPanel: null, itemContext: null, editingPanel: null,
+    tags: [], tagFilter: null, editingMedia: null, draftTags: []
   };
 
   const TRANSITIONS = [
@@ -207,13 +208,30 @@
     } catch (error) { fail(error); }
   }
 
-  async function showNow(targetType, targetId, label, fitMode = "crop") {
+  const currentView = () => document.querySelector(".view:not([hidden])")?.id || "dashboard";
+
+  // Remembers where "Show now" was tapped so coming back lands on that element.
+  async function showNow(targetType, targetId, label, fitMode = "crop", anchor = null) {
     try {
+      const origin = currentView();
       await send("/api/playback/send", { target_type: targetType, target_id: targetId, fit_mode: fitMode });
+      state.returnTo = origin !== "dashboard" ? { view: origin, anchor } : null;
       notice(`“${label}” is on the sign.`);
       await refreshStatus();
       showView("dashboard");
     } catch (error) { fail(error); }
+  }
+
+  function revealAnchor(anchor) {
+    if (!anchor) return;
+    requestAnimationFrame(() => {
+      const node = document.querySelector(`[data-anchor="${anchor}"]`);
+      if (!node) return;
+      node.scrollIntoView({ block: "center" });
+      node.classList.remove("returned");
+      void node.offsetWidth;  // restart the highlight animation
+      node.classList.add("returned");
+    });
   }
 
   let liveTimer = null;
@@ -244,6 +262,7 @@
     }
     list.replaceChildren(...state.panels.map((panel) => el("button", {
       class: `selection-item with-thumb${panel.id === state.selectedPanel ? " active" : ""}`,
+      "data-anchor": `panel-${panel.id}`,
       onclick: () => showPanel(panel.id)
     }, thumb("text_panel", panel.id, panel), el("span", { class: "selection-text" }, el("strong", { text: panel.name }), el("span", { text: panel.content })))));
     if (state.selectedPanel !== null) showPanel(state.selectedPanel, false);
@@ -260,11 +279,11 @@
     state.selectedPanel = id;
     document.querySelectorAll("#text-list .selection-item").forEach((node, index) => node.classList.toggle("active", state.panels[index]?.id === id));
     detail.replaceChildren(
-      el("div", { class: "card-heading" }, el("div", {}, el("p", { class: "eyebrow", text: "Message" }), el("h2", { text: panel.name }))),
+      el("div", { class: "card-heading", "data-anchor": `panel-detail-${panel.id}` }, el("div", {}, el("p", { class: "eyebrow", text: "Message" }), el("h2", { text: panel.name }))),
       el("div", { class: "sign-preview" }, el("img", { src: panelPreviewUrl(panel), alt: `Preview of ${panel.name}` })),
       el("p", { class: "panel-copy", text: panel.content }),
       el("div", { class: "card-actions" },
-        el("button", { class: "button primary", text: "Show now", onclick: () => showNow("text_panel", panel.id, panel.name) }),
+        el("button", { class: "button primary", text: "Show now", onclick: () => showNow("text_panel", panel.id, panel.name, "crop", `panel-detail-${panel.id}`) }),
         el("button", { class: "button", text: "Edit", onclick: () => openTextEditor(panel) }),
         el("button", { class: "button", text: "＋ Playlist", onclick: () => openItemDialog({ targetType: "text_panel", targetId: panel.id }) }),
         el("button", { class: "button danger", text: "Delete", onclick: () => removePanel(panel) })));
@@ -450,7 +469,7 @@
     document.querySelectorAll("#playlist-list .selection-item").forEach((node, index) => node.classList.toggle("active", state.playlists[index]?.id === id));
     const items = playlist.items.map((item, index) => {
       const target = describeTarget(item);
-      return el("div", { class: "playlist-row" },
+      return el("div", { class: "playlist-row", "data-anchor": `item-${item.id}` },
         thumb(target.kind, target.id, target.panel),
         el("div", { class: "item-main" },
           el("strong", { text: `${index + 1}. ${target.name}` }),
@@ -459,7 +478,7 @@
           el("button", { class: "icon-button", "aria-label": "Move up", text: "↑", disabled: index === 0, onclick: () => moveItem(playlist, item, index - 1) }),
           el("button", { class: "icon-button", "aria-label": "Move down", text: "↓", disabled: index === playlist.items.length - 1, onclick: () => moveItem(playlist, item, index + 1) }),
           el("button", { class: "icon-button", "aria-label": "Change", text: "✎", onclick: () => openItemDialog({ playlistId: playlist.id, item }) }),
-          el("button", { class: "icon-button", "aria-label": "Show now", text: "▶", onclick: () => showNow(target.kind, target.id, target.name, item.fit_mode) }),
+          el("button", { class: "icon-button", "aria-label": "Show now", text: "▶", onclick: () => showNow(target.kind, target.id, target.name, item.fit_mode, `item-${item.id}`) }),
           el("button", { class: "icon-button danger", "aria-label": "Remove", text: "✕", onclick: () => removeItem(playlist, item) })));
     });
     editor.replaceChildren(
@@ -601,7 +620,8 @@
     form.reset();
     const editing = Boolean(context.item);
     const fromContent = Boolean(context.targetType);
-    $("#item-dialog-title").textContent = editing ? "Change item" : "Add to playlist";
+    const many = context.targetIds?.length > 1;
+    $("#item-dialog-title").textContent = editing ? "Change item" : many ? `Add ${context.targetIds.length} to a playlist` : "Add to playlist";
     $("#item-submit").textContent = editing ? "Save" : "Add";
     $("#item-playlist-row").hidden = !fromContent;
     $("#item-content-row").hidden = fromContent;
@@ -645,13 +665,48 @@
     return { type, id, media };
   }
 
+  // What a file really is, so the edit panes can say whether a GIF animates.
+  function describeMedia(media) {
+    if (!media) return "";
+    if (media.media_type === "gif") {
+      return media.duration_ms ? `Animated GIF · one loop is ${seconds(media.duration_ms)}` : "Animated GIF";
+    }
+    if (media.media_type === "video") return media.duration_ms ? `Video · ${seconds(media.duration_ms)} long` : "Video";
+    return media.mime_type === "image/gif" ? "Still picture (a GIF with only one frame)" : "Still picture";
+  }
+
+  function updateItemInfo() {
+    const info = $("#item-media-info");
+    const form = $("#item-form");
+    const ids = state.itemContext?.targetIds;
+    let text = "";
+    if (ids?.length > 1) {
+      const chosen = ids.map((id) => state.media.find((entry) => entry.id === id)).filter(Boolean);
+      const moving = chosen.filter((media) => media.media_type !== "image").length;
+      text = `${chosen.length} items: ${moving} animated or video, ${chosen.length - moving} still.`;
+    } else {
+      const { media } = selectedItemTarget();
+      text = describeMedia(media);
+      const repeats = Math.max(1, Number(form.elements.repeats.value) || 1);
+      if (media?.duration_ms && media.media_type !== "image" && form.elements.play_by.value === "repeats") {
+        text += ` · ${repeats} time${repeats === 1 ? "" : "s"} ≈ ${seconds(repeats * media.duration_ms)}`;
+      }
+    }
+    info.textContent = text;
+    info.hidden = !text;
+  }
+
   function syncItemFields() {
     const { type, media } = selectedItemTarget();
-    const animated = media && media.media_type !== "image";
+    const ids = state.itemContext?.targetIds;
+    const animated = ids
+      ? ids.some((id) => state.media.find((entry) => entry.id === id)?.media_type !== "image")
+      : media && media.media_type !== "image";
     const form = $("#item-form");
     $("#item-repeats-row").hidden = !animated;
     if (!animated) form.elements.play_by.value = "time";
     $("#item-fit-row").hidden = type !== "media";
+    updateItemInfo();
   }
 
   function itemFormBody(form) {
@@ -711,9 +766,12 @@
       if (itemPreviewUrl) URL.revokeObjectURL(itemPreviewUrl);
       itemPreviewUrl = URL.createObjectURL(blob);
       $("#item-preview").src = itemPreviewUrl;
-      status.textContent = previousItemId(playlistId)
-        ? "The item before it, then this one coming in (shortened)."
-        : "This item coming onto the sign (shortened).";
+      const count = state.itemContext?.targetIds?.length || 1;
+      status.textContent = count > 1
+        ? `The first of ${count}, coming in with these settings (shortened).`
+        : previousItemId(playlistId)
+          ? "The item before it, then this one coming in (shortened)."
+          : "This item coming onto the sign (shortened).";
     } catch (error) {
       if (sequence === itemPreviewSequence) status.textContent = error.message;
     }
@@ -723,6 +781,15 @@
     const context = state.itemContext;
     const { playlistId, id, body } = itemFormBody(form);
     if (!id) throw new Error("Choose what to add");
+    if (context.targetIds?.length > 1) {
+      // A tag group goes in as one item per picture or video, in library order.
+      for (const mediaId of context.targetIds) {
+        await send(`/api/playlists/${playlistId}/items`, { ...body, media_id: mediaId });
+      }
+      state.selectedPlaylist = playlistId;
+      const playlist = state.playlists.find((entry) => entry.id === playlistId);
+      return `Added ${context.targetIds.length} to “${playlist?.name || "playlist"}”.`;
+    }
     if (context.item) {
       await send(`/api/playlists/${playlistId}/items/${context.item.id}`, { ...body, position: context.item.position }, "PUT");
     } else {
@@ -735,13 +802,35 @@
 
   // ---------- Pictures & videos ----------
 
+  function renderTagFilter(visible) {
+    const bar = $("#media-tags");
+    if (!state.tags.length) { bar.hidden = true; return; }
+    bar.hidden = false;
+    const chip = (name, label) => el("button", {
+      type: "button", class: `tag-chip${state.tagFilter === name ? " active" : ""}`, text: label,
+      onclick: () => { state.tagFilter = state.tagFilter === name || name === null ? null : name; renderMedia(); }
+    });
+    const add = state.tagFilter && visible.length
+      ? el("button", {
+        type: "button", class: "button small primary", text: `＋ Add these ${visible.length} to a playlist`,
+        onclick: () => openItemDialog({ targetType: "media", targetId: visible[0].id, targetIds: visible.map((item) => item.id) })
+      })
+      : null;
+    bar.replaceChildren(
+      el("div", { class: "tag-row" }, chip(null, "All"), ...state.tags.map((tag) => chip(tag.name, `#${tag.name} ${tag.count}`))),
+      add);
+  }
+
   function renderMedia() {
     const grid = $("#media-grid");
-    const query = $("#media-search").value.trim().toLowerCase();
+    const query = $("#media-search").value.trim().toLowerCase().replace(/^#/, "");
     const type = $("#media-filter").value;
     const items = state.media.filter((item) =>
-      (!type || item.media_type === type) && (!query || item.display_name.toLowerCase().includes(query)));
+      (!type || item.media_type === type)
+      && (!state.tagFilter || item.tags.includes(state.tagFilter))
+      && (!query || item.display_name.toLowerCase().includes(query) || item.tags.some((tag) => tag.includes(query))));
     $("#media-count").textContent = `${items.length} item${items.length === 1 ? "" : "s"}`;
+    renderTagFilter(items);
     if (!items.length) {
       grid.replaceChildren(el("p", { class: "empty", text: state.media.length ? "Nothing matches." : "Nothing uploaded yet." }));
       return;
@@ -749,16 +838,71 @@
     grid.replaceChildren(...items.map((item) => {
       const length = item.duration_ms ? ` · ${seconds(item.duration_ms)}` : "";
       const preparing = item.preparing ? " · getting it ready for the sign…" : "";
-      return el("article", { class: "media-card" },
+      return el("article", { class: "media-card", "data-anchor": `media-${item.id}` },
         el("div", { class: "media-thumb" }, thumb("media", item.id), el("span", { class: "media-type", text: TYPE_LABEL[item.media_type] })),
         el("div", { class: "media-body" },
           el("h3", { text: item.display_name, title: item.display_name }),
           el("p", { class: "media-meta", text: `${formatBytes(item.file_size_bytes)}${length}${preparing}` }),
+          item.tags.length
+            ? el("div", { class: "card-tags" }, ...item.tags.map((tag) => el("button", {
+              type: "button", class: "tag-chip small", text: `#${tag}`,
+              onclick: () => { state.tagFilter = tag; renderMedia(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+            })))
+            : null,
           el("div", { class: "media-actions" },
-            el("button", { class: "button small", text: "Show now", onclick: () => showNow("media", item.id, item.display_name) }),
+            el("button", { class: "button small", text: "Show now", onclick: () => showNow("media", item.id, item.display_name, "crop", `media-${item.id}`) }),
             el("button", { class: "button small", text: "＋ Playlist", onclick: () => openItemDialog({ targetType: "media", targetId: item.id }) }),
+            el("button", { class: "icon-button", "aria-label": "Name and tags", text: "✎", onclick: () => openMediaDialog(item) }),
             el("button", { class: "icon-button danger", "aria-label": "Delete", text: "✕", onclick: () => removeMedia(item) }))));
     }));
+  }
+
+  function renderDraftTags() {
+    const draft = state.draftTags;
+    $("#media-tag-list").replaceChildren(...(draft.length
+      ? draft.map((tag) => el("button", {
+        type: "button", class: "tag-chip active", text: `#${tag} ✕`, "aria-label": `Remove tag ${tag}`,
+        onclick: () => { state.draftTags = draft.filter((entry) => entry !== tag); renderDraftTags(); }
+      }))
+      : [el("span", { class: "muted", text: "No tags yet." })]));
+    const suggestions = state.tags.map((tag) => tag.name).filter((name) => !draft.includes(name)).slice(0, 12);
+    $("#media-tag-suggestions").replaceChildren(...suggestions.map((name) => el("button", {
+      type: "button", class: "tag-chip", text: `＋ #${name}`,
+      onclick: () => addDraftTags(name)
+    })));
+    $("#media-tag-suggestions-row").hidden = !suggestions.length;
+  }
+
+  const cleanTag = (value) => value.trim().replace(/^#+/, "").replace(/\s+/g, " ").toLowerCase().slice(0, 32);
+
+  function addDraftTags(text) {
+    for (const tag of text.split(",").map(cleanTag).filter(Boolean)) {
+      if (!state.draftTags.includes(tag) && state.draftTags.length < 20) state.draftTags.push(tag);
+    }
+    renderDraftTags();
+  }
+
+  function openMediaDialog(item) {
+    state.editingMedia = item.id;
+    state.draftTags = [...item.tags];
+    const form = $("#media-form");
+    form.reset();
+    form.elements.display_name.value = item.display_name;
+    const preview = $("#media-dialog-thumb");
+    preview.replaceChildren(thumb("media", item.id));
+    const size = item.width && item.height ? ` · ${item.width} × ${item.height}` : "";
+    $("#media-dialog-info").textContent = `${describeMedia(item)}${size} · ${formatBytes(item.file_size_bytes)}`;
+    renderDraftTags();
+    $("#media-dialog").showModal();
+  }
+
+  async function saveMedia(form) {
+    addDraftTags(form.elements.new_tag.value);
+    const media = await send(`/api/media/${state.editingMedia}`, {
+      display_name: form.elements.display_name.value,
+      tags: state.draftTags
+    }, "PATCH");
+    return `Saved “${media.display_name}”.`;
   }
 
   async function removeMedia(item) {
@@ -831,6 +975,9 @@
       ["Error", status.matrix.error || "None"],
       ["Temperature", status.temperature_c == null ? "—" : `${status.temperature_c.toFixed(1)} °C`]
     ]);
+    if (diagnostics.backup_estimate_bytes != null) {
+      $("#backup-estimate").textContent = `About ${formatBytes(diagnostics.backup_estimate_bytes)}. The sign takes a moment to pack it before the download starts.`;
+    }
     const records = diagnostics.database?.records || {};
     $("#diagnostic-summary").textContent = [
       `Checked ${new Date(diagnostics.timestamp).toLocaleString()}`,
@@ -855,11 +1002,13 @@
     // Fonts load on their own so one failing list can never leave the editor fontless.
     await loadFonts();
     try {
-      const [status, network, playlists, media, panels, diagnostics] = await Promise.all([
+      const [status, network, playlists, media, panels, diagnostics, tags] = await Promise.all([
         request("/api/status"), request("/api/network"), request("/api/playlists"),
-        request("/api/media"), request("/api/text-panels"), request("/api/diagnostics")
+        request("/api/media"), request("/api/text-panels"), request("/api/diagnostics"),
+        request("/api/media/tags")
       ]);
-      Object.assign(state, { playlists, media, panels });
+      Object.assign(state, { playlists, media, panels, tags });
+      if (state.tagFilter && !tags.some((tag) => tag.name === state.tagFilter)) state.tagFilter = null;
       renderPlaylists(); renderMedia(); renderPanels();
       renderStatus(status, network);
       renderSettings(status, network, diagnostics);
@@ -886,6 +1035,11 @@
     document.querySelectorAll(".view").forEach((view) => { view.hidden = view.id !== name; });
     document.querySelectorAll("[data-view]").forEach((link) => link.classList.toggle("active", link.dataset.view === name));
     if (name === "dashboard") liveLoop();
+    if (state.returnTo && state.returnTo.view === name) {
+      const { anchor } = state.returnTo;
+      state.returnTo = null;
+      revealAnchor(anchor);
+    }
   }
 
   // ---------- Events ----------
@@ -894,6 +1048,7 @@
     "upload-form": submitUpload,
     "playlist-form": savePlaylist,
     "item-form": saveItem,
+    "media-form": saveMedia,
     "text-form": async (form) => {
       const panel = await saveText(form);
       showView("text");
@@ -932,6 +1087,15 @@
     }
   });
 
+  document.addEventListener("keydown", (event) => {
+    if (event.target.id !== "media-new-tag") return;
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      addDraftTags(event.target.value);
+      event.target.value = "";
+    }
+  });
+
   document.addEventListener("input", (event) => {
     if (event.target.closest("#text-form")) {
       syncTextFields($("#text-form"));
@@ -941,7 +1105,7 @@
     if (event.target.closest("#item-timing") && event.target.type === "number") {
       $("#item-form").elements.play_by.value = event.target.name === "repeats" ? "repeats" : "time";
     }
-    if (event.target.closest("#item-form")) scheduleItemPreview();
+    if (event.target.closest("#item-form")) { updateItemInfo(); scheduleItemPreview(); }
   });
 
   document.addEventListener("change", (event) => {
@@ -951,6 +1115,7 @@
     }
     if (event.target.id === "item-type") { populateItemContent(); syncItemFields(); }
     if (event.target.id === "item-content") syncItemFields();
+    if (event.target.name === "play_by") updateItemInfo();
     if (event.target.closest("#item-form")) scheduleItemPreview();
     if (event.target.id === "media-filter") renderMedia();
     if (event.target.id === "media-files") {
@@ -979,7 +1144,7 @@
         const panel = await saveText($("#text-form"));
         $("#text-dialog").close();
         await load();
-        await showNow("text_panel", panel.id, panel.name);
+        await showNow("text_panel", panel.id, panel.name, "crop", `panel-detail-${panel.id}`);
       } catch (error) { fail(error); }
     },
     "copy-diagnostics": async () => {
@@ -990,6 +1155,7 @@
   };
 
   document.addEventListener("click", (event) => {
+    if (event.target.closest("#backup-link")) notice("Packing the backup… the download starts when it's ready.");
     const view = event.target.closest("[data-view]");
     if (view) { event.preventDefault(); showView(view.dataset.view); }
     const action = event.target.closest("[data-action]");
@@ -1004,8 +1170,13 @@
     }
     const playback = event.target.closest("[data-playback]");
     if (playback) {
-      request(`/api/playback/${playback.dataset.playback}`, { method: "POST" })
-        .then(() => load())
+      const action = playback.dataset.playback;
+      request(`/api/playback/${action}`, { method: "POST" })
+        .then(async () => {
+          await load();
+          // Finishing a "Show now" goes back to where it was started.
+          if (action === "release" && state.returnTo) showView(state.returnTo.view);
+        })
         .catch(fail);
     }
   });

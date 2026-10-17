@@ -213,6 +213,18 @@ dialog form { display: grid; gap: 15px; padding: 19px; }
 .sign-preview-wrap { position: sticky; top: -19px; z-index: 2; margin: 0 -19px; padding: 12px 19px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .sign-preview-wrap .sign-preview { max-width: 420px; margin: 0 auto; }
 .sign-preview-wrap .form-help { margin-top: 6px; text-align: center; }
+.tag-filter { display: grid; gap: 10px; margin-bottom: 16px; }
+.tag-filter > .button { justify-self: start; }
+.tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-chip { min-height: 34px; padding: 5px 11px; color: var(--text); background: var(--surface-soft); border: 1px solid var(--line); border-radius: 999px; font-size: 13px; font-weight: 700; }
+.tag-chip:hover { border-color: var(--line-bright); }
+.tag-chip.active { color: var(--accent-dark); background: var(--accent); border-color: var(--accent); }
+.tag-chip.small { min-height: 26px; padding: 2px 8px; font-size: 11px; }
+.card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: -4px 0 10px; }
+.media-dialog-thumb .thumb { width: 160px; margin: 0 auto; }
+.item-info { margin: 0; color: var(--text); font-weight: 650; }
+.returned { animation: returned 2.2s ease-out; }
+@keyframes returned { 0%, 45% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 3px transparent; } }
 .run-through { display: grid; gap: 6px; margin-top: 16px; padding: 12px; background: #05080d; border-radius: 10px; }
 .run-through .sign-preview { width: 100%; max-width: 480px; margin: 0 auto; }
 .run-through .form-help { margin: 0; text-align: center; }

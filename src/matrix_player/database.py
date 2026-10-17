@@ -67,6 +67,16 @@ CREATE TABLE IF NOT EXISTS playlist_items (
     UNIQUE(playlist_id, position)
 );
 CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist ON playlist_items(playlist_id, position);
+CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS media_tags (
+    media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+    tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (media_id, tag_id)
+);
+CREATE INDEX IF NOT EXISTS idx_media_tags_tag ON media_tags(tag_id);
 """
 
 # Additive column migrations, applied in order to databases created by older

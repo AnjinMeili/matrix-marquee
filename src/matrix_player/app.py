@@ -11,8 +11,10 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from .backup import remove_stale_archives
 from .config import Settings
 from .database import Database
+from .maintenance import start_library_checks
 from .matrix import MatrixAdapter, MatrixConfig, MockMatrixAdapter, RGBMatrixAdapter
 from .playback import (
     DatabasePlaybackController,
@@ -73,6 +75,8 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configured.ensure_directories()
         app.state.database.initialize()
+        remove_stale_archives(configured)
+        start_library_checks(app.state.database, app.state.storage, configured)
         app.state.proxies.start()
         app.state.proxies.submit_missing(
             row["filename"]
