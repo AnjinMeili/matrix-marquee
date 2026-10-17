@@ -39,7 +39,26 @@ def test_health_and_captive_routes(tmp_path: Path) -> None:
         assert "Matrix Player" in root.text
         assert 'href="/static/app.css"' in root.text
         assert 'src="/static/app.js"' in root.text
+        for dialog_id in (
+            "upload-dialog",
+            "playlist-dialog",
+            "text-dialog",
+            "add-item-dialog",
+            "add-to-playlist-dialog",
+        ):
+            assert f'id="{dialog_id}"' in root.text
+        script = client.get("/static/app.js").text
+        for form_id in (
+            "upload-form",
+            "playlist-form",
+            "text-form",
+            "add-item-form",
+            "add-to-playlist-form",
+        ):
+            assert f'"{form_id}"' in script
         assert client.get("/static/app.css").headers["content-type"].startswith("text/css")
+        assert client.get("/static/app.js").headers["cache-control"] == "no-cache"
+        assert root.headers["cache-control"] == "no-cache"
         assert client.get("/static/app.js").headers["content-type"].startswith(
             "text/javascript"
         )

@@ -23,6 +23,15 @@ from .routes import captive, media, playback, playlists, system, text_panels
 from .storage import MediaStorage
 
 
+class NoCacheStaticFiles(StaticFiles):
+    """Serves UI assets with revalidation so appliance updates take effect."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 class JsonFormatter(logging.Formatter):
     """Single-line JSON logs suitable for journald and log collectors."""
 
@@ -129,13 +138,16 @@ def create_app(
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.is_dir():
-        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+        app.mount("/static", NoCacheStaticFiles(directory=static_dir), name="static")
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def root() -> HTMLResponse:
         index = static_dir / "index.html"
         if index.is_file():
-            return HTMLResponse(index.read_text(encoding="utf-8"))
+            return HTMLResponse(
+                index.read_text(encoding="utf-8"),
+                headers={"Cache-Control": "no-cache"},
+            )
         return HTMLResponse(
             "<!doctype html><html><head><meta name='viewport' "
             "content='width=device-width,initial-scale=1'><title>Matrix Player</title>"

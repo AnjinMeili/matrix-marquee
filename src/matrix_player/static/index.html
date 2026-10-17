@@ -144,10 +144,29 @@
 
   <dialog id="playlist-dialog">
     <form id="playlist-form">
-      <div class="dialog-header"><div><p class="eyebrow">Playlist</p><h2>Create playlist</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close playlist dialog">×</button></div>
+      <div class="dialog-header"><div><p class="eyebrow">Playlist</p><h2 id="playlist-dialog-title">Create playlist</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close playlist dialog">×</button></div>
       <label>Playlist name<input name="name" maxlength="80" required placeholder="e.g. Welcome loop"></label>
       <label>Description<textarea name="description" maxlength="300" placeholder="Optional description"></textarea></label>
-      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Create playlist</button></div>
+      <div class="form-grid">
+        <label class="checkbox"><input name="is_enabled" type="checkbox" checked> Enabled</label>
+        <label class="checkbox"><input name="is_default" type="checkbox"> Default playlist</label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary" id="playlist-submit">Create playlist</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="add-to-playlist-dialog">
+    <form id="add-to-playlist-form">
+      <div class="dialog-header"><div><p class="eyebrow">Playlists</p><h2>Add to playlist</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close add to playlist dialog">×</button></div>
+      <p class="form-help" id="add-to-playlist-target">—</p>
+      <label>Playlist<select name="playlist_id" id="add-to-playlist-select" required></select></label>
+      <div class="form-grid">
+        <label>Duration (seconds)<input name="duration" type="number" min="0.1" max="3600" step="0.1" value="6" required></label>
+        <label>Fit mode<select name="fit_mode"><option value="stretch">Stretch to fill</option><option value="fit">Fit</option><option value="crop">Crop</option><option value="letterbox">Letterbox</option></select></label>
+        <label>Transition<select name="transition"><option value="fade">Fade</option><option value="none">Cut</option><option value="slide_left">Slide left</option><option value="slide_right">Slide right</option><option value="slide_up">Slide up</option><option value="slide_down">Slide down</option><option value="rotate">Rotate</option></select></label>
+        <label>Transition duration (seconds)<input name="transition_duration" type="number" min="0" max="10" step="0.1" value="0.5"></label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Add to playlist</button></div>
     </form>
   </dialog>
 
@@ -159,11 +178,26 @@
       <div class="form-grid">
         <label>Duration (seconds)<input name="duration" type="number" min="0.1" max="3600" step="0.1" value="5" required></label>
         <label>Repeats<input name="repeats" type="number" min="1" max="999" value="1" required></label>
-        <label>Transition<select name="transition"><option value="cut">Cut</option><option value="fade">Fade</option><option value="slide-left">Slide left</option><option value="slide-right">Slide right</option><option value="wipe">Wipe</option></select></label>
+        <label>Transition<select name="transition"><option value="none">Cut</option><option value="fade">Fade</option><option value="slide_left">Slide left</option><option value="slide_right">Slide right</option><option value="slide_up">Slide up</option><option value="slide_down">Slide down</option><option value="rotate">Rotate</option></select></label>
         <label>Transition duration (seconds)<input name="transition_duration" type="number" min="0" max="10" step="0.1" value="0.5"></label>
         <label>Fit mode<select name="fit_mode"><option value="fit">Fit</option><option value="stretch">Stretch to fill</option><option value="crop">Crop</option><option value="letterbox">Letterbox</option></select></label>
       </div>
       <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Add item</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="text-dialog">
+    <form id="text-form">
+      <div class="dialog-header"><div><p class="eyebrow">Text panel</p><h2>Create text panel</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close text panel dialog">×</button></div>
+      <label>Panel name<input name="name" maxlength="80" required placeholder="e.g. Rally time"></label>
+      <label>Message<textarea name="content" maxlength="2000" required placeholder="Text shown on the matrix"></textarea></label>
+      <div class="form-grid">
+        <label>Font size<input name="font_size" type="number" min="4" max="128" value="12" required></label>
+        <label>Alignment<select name="alignment"><option value="center">Center</option><option value="left">Left</option><option value="right">Right</option></select></label>
+        <label>Text colour<input name="color_value" type="color" value="#ffffff"></label>
+        <label>Border<select name="border_style"><option value="none">None</option><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="double">Double</option></select></label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Create panel</button></div>
     </form>
   </dialog>
 
