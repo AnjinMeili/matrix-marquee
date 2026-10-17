@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a0f18">
+  <title>Matrix Player</title>
+  <link rel="stylesheet" href="app.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#dashboard" aria-label="Matrix Player dashboard">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>Matrix Player</span>
+      </a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a href="#dashboard" data-view="dashboard"><span aria-hidden="true">⌂</span> Dashboard</a>
+        <a href="#library" data-view="library"><span aria-hidden="true">▧</span> Media</a>
+        <a href="#playlists" data-view="playlists"><span aria-hidden="true">☷</span> Playlists</a>
+        <a href="#text" data-view="text"><span aria-hidden="true">T</span> Text panels</a>
+        <a href="#settings" data-view="settings"><span aria-hidden="true">⚙</span> Settings</a>
+      </nav>
+      <div class="connection-card" aria-live="polite">
+        <span class="status-dot" id="connection-dot"></span>
+        <div><strong id="connection-label">Connecting…</strong><small id="connection-detail">Checking local player</small></div>
+      </div>
+    </aside>
+
+    <main id="content" tabindex="-1">
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden>
+        <span id="notice-text"></span>
+        <button class="icon-button" data-action="dismiss-notice" aria-label="Dismiss message">×</button>
+      </div>
+
+      <section class="view" id="dashboard" aria-labelledby="dashboard-title">
+        <header class="page-header">
+          <div><p class="eyebrow">Local control</p><h1 id="dashboard-title">Dashboard</h1><p class="subtitle" id="dashboard-summary">Loading player state…</p></div>
+          <button class="button primary" data-action="open-upload">＋ Add media</button>
+        </header>
+        <div class="dashboard-grid">
+          <article class="card output-card">
+            <div class="card-heading"><div><p class="eyebrow">Live output</p><h2 id="now-title">Nothing playing</h2></div><span class="pill" id="playback-pill">Stopped</span></div>
+            <div class="matrix-frame">
+              <div class="matrix-preview" id="live-preview" role="img" aria-label="Live matrix output preview">
+                <div class="preview-copy"><strong>MATRIX</strong><small>Ready for playback</small></div>
+              </div>
+            </div>
+            <p class="progress-label"><span id="now-detail">Select a playlist to begin</span><span id="now-progress">—</span></p>
+            <div class="transport" aria-label="Playback controls">
+              <button class="button" data-playback="pause" aria-label="Pause playback">Ⅱ <span>Pause</span></button>
+              <button class="button" data-playback="resume" aria-label="Resume playback">▶ <span>Resume</span></button>
+              <button class="button danger" data-playback="stop" aria-label="Stop playback">■ <span>Stop</span></button>
+            </div>
+          </article>
+          <article class="card health-card">
+            <div class="card-heading"><div><p class="eyebrow">Device</p><h2>System health</h2></div><button class="text-button" data-action="refresh-status">Refresh</button></div>
+            <dl class="metrics">
+              <div><dt>Matrix</dt><dd id="health-matrix">—</dd></div>
+              <div><dt>Temperature</dt><dd id="health-temp">—</dd></div>
+              <div><dt>Storage</dt><dd id="health-storage">—</dd></div>
+              <div><dt>Wi-Fi access point</dt><dd id="health-network">—</dd></div>
+              <div><dt>Upstream</dt><dd id="health-upstream">—</dd></div>
+            </dl>
+          </article>
+          <article class="card wide">
+            <div class="card-heading"><div><p class="eyebrow">Quick start</p><h2>Play a playlist</h2></div><a href="#playlists" class="text-link">Manage playlists</a></div>
+            <div id="dashboard-playlists" class="compact-list"><p class="empty">Loading playlists…</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="library" aria-labelledby="library-title" hidden>
+        <header class="page-header">
+          <div><p class="eyebrow">Content</p><h1 id="library-title">Media library</h1><p class="subtitle">Images, GIFs, and videos stored on this device.</p></div>
+          <button class="button primary" data-action="open-upload">＋ Upload files</button>
+        </header>
+        <div class="toolbar card">
+          <label class="search-field"><span class="sr-only">Search media</span><span aria-hidden="true">⌕</span><input id="media-search" type="search" placeholder="Search media" autocomplete="off"></label>
+          <label><span class="sr-only">Filter media type</span><select id="media-filter"><option value="">All types</option><option value="image">Images</option><option value="gif">GIFs</option><option value="video">Videos</option></select></label>
+          <span id="media-count" class="muted">0 items</span>
+        </div>
+        <div id="media-grid" class="media-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="view" id="playlists" aria-labelledby="playlists-title" hidden>
+        <header class="page-header">
+          <div><p class="eyebrow">Playback</p><h1 id="playlists-title">Playlists</h1><p class="subtitle">Build and arrange what appears on the matrix.</p></div>
+          <button class="button primary" data-action="new-playlist">＋ New playlist</button>
+        </header>
+        <div class="split-layout">
+          <aside class="card collection-panel" aria-label="Playlist list">
+            <div id="playlist-list" class="selection-list"></div>
+          </aside>
+          <article class="card editor-panel" id="playlist-editor">
+            <div class="empty-state"><span class="empty-icon">☷</span><h2>Select a playlist</h2><p>Choose one from the list or create a new playlist.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="text" aria-labelledby="text-title" hidden>
+        <header class="page-header">
+          <div><p class="eyebrow">Content</p><h1 id="text-title">Text panels</h1><p class="subtitle">Create messages formatted for the matrix.</p></div>
+          <button class="button primary" data-action="new-text-panel">＋ New panel</button>
+        </header>
+        <div class="split-layout">
+          <aside class="card collection-panel" aria-label="Text panel list">
+            <div id="text-list" class="selection-list"></div>
+          </aside>
+          <article class="card editor-panel" id="text-editor">
+            <div class="empty-state"><span class="empty-icon">T</span><h2>Select a text panel</h2><p>Choose one from the list or create a new panel.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="settings" aria-labelledby="settings-title" hidden>
+        <header class="page-header">
+          <div><p class="eyebrow">Device</p><h1 id="settings-title">Settings & diagnostics</h1><p class="subtitle">Local appliance and network information.</p></div>
+          <button class="button" data-action="refresh-diagnostics">Refresh</button>
+        </header>
+        <div class="settings-grid">
+          <article class="card"><div class="card-heading"><div><p class="eyebrow">Connection</p><h2>Network</h2></div><span class="status-dot" id="settings-network-dot"></span></div><dl class="metrics" id="network-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl></article>
+          <article class="card"><p class="eyebrow">Hardware</p><h2>Matrix profile</h2><dl class="metrics" id="matrix-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl><p class="form-help">Hardware configuration is managed on the appliance.</p></article>
+          <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Support</p><h2>Diagnostics</h2></div></div><div id="diagnostic-summary" class="diagnostic-box">Checking services…</div><div class="button-row"><button class="button" data-action="copy-diagnostics">Copy summary</button><a class="button" href="/api/diagnostics/logs" download>Download log bundle</a></div><p class="form-help">Log bundles should exclude credentials and uploaded content.</p></article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="upload-dialog">
+    <form id="upload-form">
+      <div class="dialog-header"><div><p class="eyebrow">Media library</p><h2>Upload media</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close upload dialog">×</button></div>
+      <label class="drop-zone" for="media-files"><span class="drop-icon">⇧</span><strong>Choose files</strong><span>Images, animated GIFs, or supported video</span><input id="media-files" name="files" type="file" accept="image/*,video/*" multiple required></label>
+      <div id="upload-files" class="file-selection muted">No files selected</div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Upload</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="playlist-dialog">
+    <form id="playlist-form">
+      <div class="dialog-header"><div><p class="eyebrow">Playlist</p><h2>Create playlist</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close playlist dialog">×</button></div>
+      <label>Playlist name<input name="name" maxlength="80" required placeholder="e.g. Welcome loop"></label>
+      <label>Description<textarea name="description" maxlength="300" placeholder="Optional description"></textarea></label>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Create playlist</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="add-item-dialog">
+    <form id="add-item-form">
+      <div class="dialog-header"><div><p class="eyebrow">Playlist item</p><h2>Add content</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close add item dialog">×</button></div>
+      <label>Content type<select name="item_type" id="item-type"><option value="media">Media</option><option value="text_panel">Text panel</option></select></label>
+      <label>Content<select name="content_id" id="item-content" required></select></label>
+      <div class="form-grid">
+        <label>Duration (seconds)<input name="duration" type="number" min="0.1" max="3600" step="0.1" value="5" required></label>
+        <label>Repeats<input name="repeats" type="number" min="1" max="999" value="1" required></label>
+        <label>Transition<select name="transition"><option value="cut">Cut</option><option value="fade">Fade</option><option value="slide-left">Slide left</option><option value="slide-right">Slide right</option><option value="wipe">Wipe</option></select></label>
+        <label>Transition duration (seconds)<input name="transition_duration" type="number" min="0" max="10" step="0.1" value="0.5"></label>
+        <label>Fit mode<select name="fit_mode"><option value="fit">Fit</option><option value="crop">Crop</option><option value="letterbox">Letterbox</option></select></label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary">Add item</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog">
+    <form id="confirm-form" method="dialog">
+      <div class="dialog-header"><div><p class="eyebrow">Please confirm</p><h2 id="confirm-title">Delete item?</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close confirmation">×</button></div>
+      <p id="confirm-message">This cannot be undone.</p>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button danger-fill">Delete</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

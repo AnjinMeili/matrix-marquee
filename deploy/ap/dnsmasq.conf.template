@@ -1,0 +1,15 @@
+# Bind only to the explicitly selected AP interface.
+interface=@AP_INTERFACE@
+bind-interfaces
+listen-address=@AP_ADDRESS@
+dhcp-range=@DHCP_START@,@DHCP_END@,255.255.255.0,12h
+dhcp-option=3,@AP_ADDRESS@
+dhcp-option=6,@AP_ADDRESS@
+domain=protest.local
+local=/protest.local/
+address=/protest.local/@AP_ADDRESS@
+# Captive/offline appliance: resolve all names to the local portal.
+address=/#/@AP_ADDRESS@
+log-dhcp
+log-queries=extra
+

@@ -16,11 +16,13 @@ The primary operator is expected to use a phone on the local Wi-Fi network. The 
 
 ### Confirmed deployment constraints
 
-- Development/deployment target: Raspberry Pi at `192.168.1.193` over SSH.
+- Development/deployment target: Raspberry Pi at `192.168.1.194` over SSH.
 - Operating system: DietPi OS.
 - Runtime privilege: the appliance currently assumes a root-only runtime; service permissions should be narrowed where practical without breaking matrix access or panel administration.
 - The panel requires extended access, so the final design must document which privileged operations are needed and isolate them behind a small, auditable service boundary.
-- The attached matrix has been validated with:
+- The attached 96x64 viewing matrix has been validated with the supplied driver
+  initialization string. The driver framebuffer is 64x96 because the
+  configured `Rotate:90` mapper produces the 96x64 viewing orientation:
 
   ```text
   --led-rows=32 --led-cols=64 --led-chain=1 --led-parallel=3

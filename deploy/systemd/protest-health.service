@@ -1,0 +1,13 @@
+[Unit]
+Description=Check Protest appliance health
+After=protest.service
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/protest/protest.env
+ExecStart=/opt/protest/current/scripts/health-check.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=protest-health
+

@@ -1,0 +1,17 @@
+/var/log/protest/*.log {
+    daily
+    rotate 30
+    maxsize 20M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    dateext
+    su root root
+    create 0640 root root
+    sharedscripts
+    postrotate
+        /bin/systemctl kill -s HUP protest.service >/dev/null 2>&1 || true
+    endscript
+}
+

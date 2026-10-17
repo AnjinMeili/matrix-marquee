@@ -1,0 +1,31 @@
+[Unit]
+Description=Protest RGB matrix media appliance
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/protest/current
+EnvironmentFile=/etc/protest/protest.env
+ExecStart=/opt/protest/current/scripts/run-service.sh
+ExecStartPre=/usr/bin/test -r /etc/protest/protest.env
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+KillSignal=SIGINT
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=protest
+UMask=0027
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full
+ReadWritePaths=/var/lib/protest /var/log/protest
+WatchdogSec=0
+
+[Install]
+WantedBy=multi-user.target
+
