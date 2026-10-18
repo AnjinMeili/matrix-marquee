@@ -148,7 +148,9 @@ panel's power input, as the matrix library's wiring guide recommends.
   phone's player, a GIF gets an MP4 copy the first time it is opened.
 - **Picture fit** is chosen per playlist item: fill the sign (trim edges), the
   whole picture, stretch to fill, or "Stretch the edges to fill the bars"
-  (Fibonastretch). The last fills the empty bars by stretching the picture's
+  (Fibonastretch), or "Repeat the picture to fill the bars" (tile: the bars
+  show exact copies of the picture's other side, like a window cut from the
+  middle of three copies in a row; no stretching or blur). Fibonastretch fills the empty bars by stretching the picture's
   edge pixels outward in Fibonacci steps (1, 1, 2, 3, 5, ...), starting at the
   picture's own edge and widest at the sign's edge, so there is no seam. Each pixel grows in both directions as it steps outward, and the overlapping neighbours are combined, so the bars blur more toward the sign's edge. The blur can be Crisp (none: pixels are only stretched, so each keeps its clarity), Blur (average, the default), Glow (lightest wins), Bright (screen), Dense (additive), or Dark (multiply); Bright and Dense wash the bars out to white. It lights
   the bars, so bright pictures draw more power than with black bars. Video

@@ -310,3 +310,52 @@ def test_a_fibonacci_gif_plays_live_first_then_from_the_cache(tmp_path: Path) ->
         assert not list(settings.fit_cache_path.glob("anim-*"))
     finally:
         storage.fit_cache.close()
+
+
+# Tile: the bars show the picture's other side -------------------------------
+
+from matrix_player.rendering import tile_fill  # noqa: E402
+
+
+@pytest.mark.parametrize("size", [(96, 64), (192, 64), (64, 32), (384, 128), (50, 200)])
+@pytest.mark.parametrize("source", [(40, 30), (30, 40), (7, 5)])
+def test_tile_is_a_window_cut_from_the_middle_of_three_copies(size, source) -> None:
+    picture = gradient(contained_size(source, size))
+    width, height = picture.size
+    array = np.asarray(picture)
+    # 2m + 1 copies each way, so any window fits around the middle copy.
+    m_y, m_x = size[1] // height + 2, size[0] // width + 2
+    copies = np.tile(array, (2 * m_y + 1, 2 * m_x + 1, 1))
+    # The near bar takes the smaller half of an odd gap, as the other fits do.
+    top = m_y * height - (size[1] - height) // 2
+    left = m_x * width - (size[0] - width) // 2
+    expected = copies[top:top + size[1], left:left + size[0]]
+    assert np.array_equal(np.asarray(tile_fill(picture, size)), expected)
+
+
+def test_tile_keeps_the_picture_whole_and_shows_the_far_side_in_the_bars() -> None:
+    picture = gradient((100, 40))
+    out = np.asarray(tile_fill(picture, (140, 40)))
+    array = np.asarray(picture)
+    assert np.array_equal(out[:, 20:120], array)
+    assert np.array_equal(out[:, :20], array[:, -20:])  # left bar: the right end
+    assert np.array_equal(out[:, 120:], array[:, :20])  # right bar: the left end
+
+
+def test_tile_works_through_fit_image_and_the_mode_lists_agree() -> None:
+    assert fit_image(gradient((640, 480)), (192, 64), "tile").size == (192, 64)
+    assert fit_image(gradient((480, 640)), (192, 64), "tile").size == (192, 64)
+    assert {m.value for m in models.FitMode} == {m.value for m in FitMode}
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_video_tile_fills_the_bars(tmp_path: Path) -> None:
+    video = tmp_path / "clip.mp4"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=10",
+         "-t", "1", "-pix_fmt", "yuv420p", str(video)],
+        check=True,
+    )
+    frames = list(VideoFrameSource(video, (192, 64), fit_mode="tile"))
+    assert frames and all(f.image.size == (192, 64) for f in frames)
+    assert np.asarray(frames[0].image)[:, 0].max() > 0

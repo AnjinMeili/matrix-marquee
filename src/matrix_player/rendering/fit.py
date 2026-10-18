@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Tuple, Union
 
+import numpy as np
 from PIL import Image, ImageColor
 
 from .fibonacci import DEFAULT_BLUR, fibonacci_fit_for
@@ -20,6 +21,7 @@ class FitMode(str, Enum):
     LETTERBOX = "letterbox"
     STRETCH = "stretch"
     FIBONACCI = "fibonacci"
+    TILE = "tile"
 
 
 def contained_size(source: Tuple[int, int], size: Tuple[int, int]) -> Tuple[int, int]:
@@ -29,6 +31,27 @@ def contained_size(source: Tuple[int, int], size: Tuple[int, int]) -> Tuple[int,
         min(size[0], max(1, round(source[0] * scale))),
         min(size[1], max(1, round(source[1] * scale))),
     )
+
+
+def tile_fill(picture: Image.Image, size: Tuple[int, int]) -> Image.Image:
+    """The bars show the picture's other side, as a window cut from the middle of
+    three copies in a row (more if the bars are wider than the picture)."""
+    width, height = picture.size
+    if (width, height) == tuple(size):
+        return picture
+    array = np.asarray(picture.convert("RGB"))
+    rows = (np.arange(size[1]) - (size[1] - height) // 2) % height
+    columns = (np.arange(size[0]) - (size[0] - width) // 2) % width
+    return Image.fromarray(np.ascontiguousarray(array[rows][:, columns]))
+
+
+def fill_bars(
+    picture: Image.Image, size: Tuple[int, int], mode: Union[FitMode, str], blur: str = DEFAULT_BLUR
+) -> Image.Image:
+    """Fills the bars around a picture already fitted inside *size*."""
+    if FitMode(mode) is FitMode.TILE:
+        return tile_fill(picture, size)
+    return fibonacci_fit_for(picture.size, size).apply(picture, blur)
 
 
 def fit_image(
@@ -47,9 +70,9 @@ def fit_image(
     if selected is FitMode.STRETCH:
         return source.resize(size, Image.Resampling.LANCZOS)
 
-    if selected is FitMode.FIBONACCI:
+    if selected in (FitMode.FIBONACCI, FitMode.TILE):
         picture = source.resize(contained_size(source.size, size), Image.Resampling.LANCZOS)
-        return fibonacci_fit_for(picture.size, size).apply(picture, blur)
+        return fill_bars(picture, size, selected, blur)
 
     scale = (
         max(width / source.width, height / source.height)

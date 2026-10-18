@@ -7,8 +7,8 @@ from typing import Iterator, List, Optional, Tuple, Union
 
 from PIL import Image, ImageSequence
 
-from .fibonacci import DEFAULT_BLUR, fibonacci_fit_for
-from .fit import FitMode, contained_size, fit_image
+from .fibonacci import DEFAULT_BLUR
+from .fit import FitMode, contained_size, fill_bars, fit_image
 from .text import SCROLL_EFFECTS, TextRenderer, TextStyle
 
 
@@ -236,16 +236,16 @@ class VideoFrameSource(FrameSource):
             raise RuntimeError("ffmpeg is required for video playback")
         fps = self._detected_fps()
         width, height = self.size
-        fibonacci = None
-        if self.fit_mode is FitMode.FIBONACCI:
+        fills_bars = False
+        if self.fit_mode in (FitMode.FIBONACCI, FitMode.TILE):
             probed = self._probe_size()
             if probed is not None:
-                # ffmpeg only scales; the edge strips are drawn here, per frame.
+                # ffmpeg only scales; the bars are drawn here, per frame.
                 width, height = contained_size(probed, self.size)
-                fibonacci = fibonacci_fit_for((width, height), self.size)
+                fills_bars = True
         command = [
             executable, "-v", "error", "-i", str(self.path), "-an",
-            "-vf", self._filter(width, height, fibonacci is not None),
+            "-vf", self._filter(width, height, fills_bars),
             "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
         ]
         self._process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -258,8 +258,8 @@ class VideoFrameSource(FrameSource):
                 if len(data) != frame_bytes:
                     break
                 frame = Image.frombytes("RGB", (width, height), data)
-                if fibonacci is not None:
-                    frame = fibonacci.apply(frame, self.fit_blur)
+                if fills_bars:
+                    frame = fill_bars(frame, self.size, self.fit_mode, self.fit_blur)
                 yield Frame(frame, 1.0 / fps)
                 index += 1
         finally:
