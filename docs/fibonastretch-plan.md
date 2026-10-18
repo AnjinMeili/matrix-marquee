@@ -4,7 +4,7 @@
 
 **Cache.** Frames are fitted once and read back from disk (`rendering/fitcache.py`): GIFs and videos with this fit play live the first time while a low-priority worker writes raw sign-size frames to a cache directory; later plays read the file. The key covers the media file (name, mtime, size, so a finished video proxy supersedes the original), sign size, fit and blur, and a version constant to bump when the look changes. Limits: 1 GiB total (oldest pruned first), at most a quarter of it per file (bigger clips stay live, with a marker so they are not retried), files never backed up, previews never trigger builds. Stills are not cached: one fit costs less than reading a file. The sections below describe the first design, including the overlap blend and the `fit_blend` field, which no longer exist.
 
-**Status:** built 2026-10-18 (steps 1–4 and the video path); not committed, not deployed, and video speed not yet measured on the Pi. Built with the answers to the open questions below as defaults. Source: [specs/Fibonastretch.txt](../specs/Fibonastretch.txt).
+**Status:** built, deployed to the sign, and pushed on 2026-10-18, with every step below done including the video path. On the Pi, the stretch costs about 2 ms per frame at 96×64 and 10 ms at 384×128 live, and reading from the cache costs 0.08 and 0.36 ms. Real video through the running service has not been timed. The source note is `specs/Fibonastretch.txt`, which lives only on the owner's machine (`specs/` is not tracked).
 
 ## The request
 
