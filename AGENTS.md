@@ -27,7 +27,7 @@ session.
 | Deploying to the sign, rolling back, or checking it after a change or power cycle | `deploy-sign` (project skill) | Approval rule, database backup, `scripts/verify-deploy.sh`, checking on the hardware |
 | Any change to `src/matrix_player/static/` or to API responses the page renders | `ui-check` (project skill) | The captive-portal window and phone rendering faults that unit tests can't see |
 | Building the LLM sign designer (`docs/companion-designer-plan.md`) | `claude-api` | Current model IDs, structured outputs, vision, caching, refusal handling |
-| Any chart (the Heat & power chart, future usage or sound charts) | `dataviz` | Readable single-series charts in the dark UI |
+| Any chart (the Heat & power chart, future usage, sound, or sensor charts, and charts drawn on the panel) | `dataviz` | Readable single-series charts in the dark UI; bold, simple forms on the panel |
 | Reviewing a diff for bugs | `code-review` | |
 | Changes to routes, uploads, backups, or anything reachable from the Wi-Fi | `security-review` | There is no login: anyone on the Wi-Fi can call every API |
 
@@ -94,6 +94,14 @@ session.
   - ghost copies at panel joins: `MATRIX_PWM_LSB_NANOSECONDS`;
   - errors at row ends: `MATRIX_GPIO_SLOWDOWN`.
 - **Power:** about 14–15 A on near-white on a 20 A supply. The panels are rated
-  35 W each, 21 A for all three.
+  35 W each, 21 A for all three. They are outdoor panels chosen to be seen in
+  daylight, so full brightness in sun is normal use, not an edge case.
+- **The heaviest load** is video or animation with a white or yellow
+  background: about 80% of full white, frame after frame. The panel's
+  brightness curve means 50% brightness draws about a fifth of the current.
+- **Battery:** the first sign rides on a wheelchair and runs from battery
+  packs, so power is runtime and weight. Keep bright content possible (white is
+  wanted for impact) and manage the draw instead: see the power items in
+  `PROJECT_PLAN.md` §14 and `docs/sensor-agent-plan.md`.
 - **Diffuser:** the sign sits behind one, so 1 px detail blurs. Heavy fonts with
   an outline read best.

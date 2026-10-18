@@ -29,6 +29,10 @@ plus the playlist editor, message detail, message editor, and media dialog at
 2 cannot run (no Chrome or no `websocket-client`). `python -m pytest` runs it
 too, as `test_every_view_renders_cleanly_at_phone_size`.
 
+Signs come in many sizes. To check another shape, set the size first, e.g.
+`MATRIX_PLAYER_MATRIX_WIDTH=192 MATRIX_PLAYER_MATRIX_HEIGHT=64 python
+tools/ui_check.py --out <dir>`. Previews should take that shape and dot grid.
+
 Then **look at the screenshots** with the Read tool. The check catches
 text and overflow faults, not visual ones such as overlapping controls,
 unreadable contrast, or a chart drawn too small. Known capture artifacts to
