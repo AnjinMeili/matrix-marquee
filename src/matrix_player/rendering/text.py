@@ -15,6 +15,8 @@ from typing import Dict, Iterator, List, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
+from .fit import pixel_unit
+
 FONT_DIR = Path(__file__).resolve().parent.parent / "fonts"
 SYSTEM_FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
 
@@ -53,7 +55,7 @@ SCROLL_EFFECTS = frozenset({"scroll", "scroll_right"})
 BORDER_STYLES = ("none", "solid", "dashed", "double", "marquee", "rainbow")
 ALIGNMENTS = ("left", "center", "right")
 
-SCROLL_SPEED = 32.0  # pixels per second at normal speed
+SCROLL_SPEED = 32.0  # pixels per second at normal speed on a 64-pixel-tall sign; scaled to the sign
 # One speed setting paces every animation: scrolling, pulsing, flashing, colour.
 MOTION_SPEEDS = {"slow": 0.55, "normal": 1.0, "fast": 1.8}
 ITALIC_SLANT = 0.2
@@ -260,7 +262,7 @@ def layout_text(text: str, style: TextStyle, box: Tuple[int, int], single_line: 
 
     if style.font_size > 0:
         return build(style.font_size)
-    low, high = 6, max(7, min(240, box_height * 2))
+    low, high = 6, max(7, box_height * 2)
     best = build(low)
     while low <= high:
         middle = (low + high) // 2
@@ -317,17 +319,19 @@ class TextRenderer:
             if background is not None
             else Image.new("RGB", size, _rgb(self.style.background_color))
         )
+        # Borders, shakes, and scrolling scale with the sign so they look the same on any size.
+        self.unit = pixel_unit(size)
+        self.scroll_speed = SCROLL_SPEED * size[1] / 64
         border = self.style.border_style
-        self.border_width = 0 if border == "none" else 3 if border == "double" else 1
-        inset = self.border_width + 1
+        self.border_width = self.unit * (0 if border == "none" else 3 if border == "double" else 1)
+        inset = self.border_width + self.unit
         self.box = (inset, inset, size[0] - inset, size[1] - inset)
         box_size = (self.box[2] - self.box[0], self.box[3] - self.box[1])
         headroom = {"pulse": 1.1, "pow": 1.12, "shake": 1.06}.get(self.style.effect, 1.0)
         fit_box = (int(box_size[0] / headroom), int(box_size[1] / headroom))
         self.block = layout_text(text, self.style, fit_box, single_line=self.style.effect in SCROLL_EFFECTS)
         self._outline_color = Image.new("RGB", size, _rgb(self.style.outline_color))
-        self._perimeter = _perimeter(size)
-        self._inner_perimeter = _perimeter(size, 2)
+        self._rings = [_perimeter(size, inset) for inset in range(self.unit)]
 
     @property
     def animated(self) -> bool:
@@ -345,7 +349,7 @@ class TextRenderer:
     def cycle_seconds(self) -> float:
         """Length of one natural pass of the animation, e.g. one full scroll."""
         if self.style.effect in SCROLL_EFFECTS:
-            return (self.block.size[0] + (self.box[2] - self.box[0])) / (SCROLL_SPEED * self.speed)
+            return (self.block.size[0] + (self.box[2] - self.box[0])) / (self.scroll_speed * self.speed)
         if self.style.effect in {"pow", "zoom"}:
             return 1.0 / self.speed
         return 2.0 / self.speed if self.animated else 0.0
@@ -367,7 +371,7 @@ class TextRenderer:
             return 1.0 + 0.1 * math.sin(2 * math.pi * t / 0.8), 0.0, 0.0, True
         if effect == "shake":
             rng = random.Random(int(t * 20))
-            return 1.0, rng.randint(-2, 2), rng.randint(-2, 2), True
+            return 1.0, rng.randint(-2, 2) * self.unit, rng.randint(-2, 2) * self.unit, True
         if effect == "flash":
             return 1.0, 0.0, 0.0, (t % 0.6) < 0.4
         if effect == "pow":
@@ -375,14 +379,14 @@ class TextRenderer:
                 return 0.2 + 0.8 * _ease_out_back(t / 0.35), 0.0, 0.0, True
             if t < 0.6:
                 rng = random.Random(int(t * 30))
-                return 1.0, rng.randint(-2, 2), rng.randint(-1, 1), True
+                return 1.0, rng.randint(-2, 2) * self.unit, rng.randint(-1, 1) * self.unit, True
             return 1.0 + 0.03 * math.sin(2 * math.pi * t / 1.2), 0.0, 0.0, True
         if effect == "zoom":
             if t < 0.3:
                 return 3.0 - 2.0 * (1 - (1 - t / 0.3) ** 3), 0.0, 0.0, True
             if t < 0.45:
                 rng = random.Random(int(t * 30))
-                return 1.0, rng.randint(-2, 2), rng.randint(-2, 2), True
+                return 1.0, rng.randint(-2, 2) * self.unit, rng.randint(-2, 2) * self.unit, True
         return 1.0, 0.0, 0.0, True
 
     def _burst(self, canvas: Image.Image, t: float) -> None:
@@ -407,25 +411,30 @@ class TextRenderer:
             return
         color = _rgb(self.style.border_color)
         pixels = canvas.load()
+        unit = self.unit
         if style in {"solid", "double"}:
             draw = ImageDraw.Draw(canvas)
-            draw.rectangle((0, 0, self.size[0] - 1, self.size[1] - 1), outline=color)
+            draw.rectangle((0, 0, self.size[0] - 1, self.size[1] - 1), outline=color, width=unit)
             if style == "double":
-                draw.rectangle((2, 2, self.size[0] - 3, self.size[1] - 3), outline=color)
-        elif style == "dashed":
-            for index, (x, y) in enumerate(self._perimeter):
-                if index % 5 < 3:
-                    pixels[x, y] = color
-        elif style == "marquee":
-            offset = int(t * 14)
-            for index, (x, y) in enumerate(self._perimeter):
-                if (index + offset) % 6 < 3:
-                    pixels[x, y] = color
-        elif style == "rainbow":
-            count = max(1, len(self._perimeter))
-            for index, (x, y) in enumerate(self._perimeter):
-                r, g, b = colorsys.hsv_to_rgb((index / count - t * 0.4) % 1.0, 1.0, 1.0)
-                pixels[x, y] = (round(r * 255), round(g * 255), round(b * 255))
+                inset = 2 * unit
+                draw.rectangle(
+                    (inset, inset, self.size[0] - 1 - inset, self.size[1] - 1 - inset), outline=color, width=unit
+                )
+            return
+        # Dashes and the marquee's step grow with the sign, ring by ring.
+        offset = int(t * 14 * unit)
+        for ring in self._rings:
+            count = max(1, len(ring))
+            for index, (x, y) in enumerate(ring):
+                if style == "dashed":
+                    if (index // unit) % 5 < 3:
+                        pixels[x, y] = color
+                elif style == "marquee":
+                    if ((index + offset) // unit) % 6 < 3:
+                        pixels[x, y] = color
+                elif style == "rainbow":
+                    r, g, b = colorsys.hsv_to_rgb((index / count - t * 0.4) % 1.0, 1.0, 1.0)
+                    pixels[x, y] = (round(r * 255), round(g * 255), round(b * 255))
 
     def frame(self, t: float = 0.0) -> Image.Image:
         t *= self.speed
@@ -439,7 +448,7 @@ class TextRenderer:
             width, height = (outline or glyph).size
             if self.style.effect in SCROLL_EFFECTS:
                 travel = self.block.size[0] + (self.box[2] - self.box[0])
-                offset = (t * SCROLL_SPEED) % travel
+                offset = (t * self.scroll_speed) % travel
                 if self.style.effect == "scroll_right":
                     x = self.box[0] - self.block.size[0] + offset
                 else:

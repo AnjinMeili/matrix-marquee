@@ -6,6 +6,8 @@ from typing import Iterator, Union
 import numpy as np
 from PIL import Image
 
+from .fit import pixel_unit
+
 
 class Transition(str, Enum):
     CUT = "cut"
@@ -193,6 +195,7 @@ def transition_frames(
     if kind is Transition.IMPACT:
         # Comic-book slam: new image punches in oversized, flashes, then shakes.
         rng = random.Random(seed)
+        unit = pixel_unit(size)
         slam = max(1, frames // 2)
         for index in range(1, frames + 1):
             if index < slam:
@@ -208,7 +211,7 @@ def transition_frames(
                 yield Image.blend(new, Image.new("RGB", size, (255, 255, 255)), 0.6)
             elif index < frames:
                 canvas = Image.new("RGB", size)
-                canvas.paste(new, (rng.randint(-3, 3), rng.randint(-2, 2)))
+                canvas.paste(new, (rng.randint(-3, 3) * unit, rng.randint(-2, 2) * unit))
                 yield canvas
             else:
                 yield new.copy()

@@ -1,8 +1,10 @@
 # Agent guide
 
 Instructions for an AI coding agent working in this repository: the software
-for a protest sign, a Raspberry Pi 4 driving three outdoor 64×32 HUB75 panels
-as one 96×64 display, controlled from a phone over the sign's own Wi-Fi.
+for a protest sign, a Raspberry Pi 4 driving HUB75 panels as one display,
+controlled from a phone over the sign's own Wi-Fi. The first build is three
+outdoor 64×32 panels as one 96×64 display; more signs of many sizes will
+follow.
 `CLAUDE.md` imports this file, so Claude Code loads it at the start of every
 session.
 
@@ -13,7 +15,9 @@ session.
 2. [PROJECT_PLAN.md](PROJECT_PLAN.md) §12–14: decisions on record, the related applications, what is built
    and what is open.
 3. The `docs/*-plan.md` for a feature before building it. Plans exist for the
-   LLM sign designer, street-sound counting, and WLED output.
+   LLM sign designer, street-sound counting, text reveals and transitions,
+   the Pico sensor agent, and receiving pixel protocols (WLED output was
+   dropped).
 4. [needs.txt](needs.txt): the owner's own goals, as written. Do not edit it.
 
 ## Which skill to load
@@ -67,13 +71,19 @@ session.
 - **Database changes are additive** (`CREATE TABLE IF NOT EXISTS`, entries in
   `COLUMN_MIGRATIONS`), so older releases still run against a newer database.
 - **Previews must match the panel:** render with `matrix_player.rendering`.
+- **Sign size is configuration, never a constant.** Read it from the matrix
+  or settings. Scale pixel amounts (borders, shakes, offsets) with
+  `pixel_unit(size)`, and speeds with the sign's height, so a sign looks the
+  same at any size; 96×64 is the reference. Test new drawing at several sizes,
+  as `test_text_looks_the_same_on_signs_of_any_size` does.
 - **Every new setting read from the environment** goes in `.env.example`. A
   test enforces this.
 
 ## Panel hardware facts (not obvious from the code)
 
 - **Pins:** three parallel chains on the "regular" mapping use GPIO 2–27. Only
-  GPIO 0/1 are free, as I2C bus `i2c0`, the planned path for sensors.
+  GPIO 0/1 are free (I2C bus `i2c0`). Sensors go through a Pico on USB
+  instead (`docs/sensor-agent-plan.md`).
 - **Brightness and the CIE curve are applied per canvas when a frame is
   drawn.** Frames swap on vsync between two canvases, so a held still image
   must be redrawn for a brightness change to show.

@@ -4,6 +4,14 @@ from typing import Tuple, Union
 from PIL import Image, ImageColor
 
 
+def pixel_unit(size: Tuple[int, int]) -> int:
+    """Whole pixels that match one pixel on a 64-pixel-tall sign, for borders and shakes.
+
+    Signs come in any size, so fixed pixel amounts would vanish on large ones.
+    """
+    return max(1, round(size[1] / 64))
+
+
 class FitMode(str, Enum):
     FIT = "fit"
     CROP = "crop"

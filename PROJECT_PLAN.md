@@ -407,7 +407,7 @@ The static browser mockup is in [mockup.html](./mockup.html). Open it directly i
 
 The questions this section originally listed have been settled as follows:
 
-1. **Matrix:** 96x64 viewing area from three parallel 64x32 panels, using the confirmed driver flags with the `Rotate:90` mapper.
+1. **Matrix:** the first build is a 96x64 viewing area from three parallel 64x32 panels, using the confirmed driver flags with the `Rotate:90` mapper. Sign size is configuration, not a constant: more signs of many sizes are planned, so everything drawn scales to the configured size.
 2. **OS and networking:** DietPi (Debian 13). `hostapd` and `dnsmasq` serve the AP on `wlan0`, and DietPi's network manager stays in charge of `eth0`.
 3. **Uploads:** 250 MiB limit. JPEG, PNG, WebP, GIF, MP4, WebM, and MOV are accepted. Videos are validated with ffprobe and played from a small H.264 copy made in the background.
 4. **Time vs. repeats:** set per item. Still pictures and messages show for a time; animations either loop to fill a time or play N whole times. Scrolling text always gets at least one full pass.
@@ -420,9 +420,10 @@ The questions this section originally listed have been settled as follows:
 This sign is one of three applications for managing matrix displays with
 varied information:
 
-- **Protest**, this repository: the sign's player and manager.
-- **MatrixPrism:** music-driven visuals composed on a laptop and streamed
-  as DDP.
+- **Protest**, this repository: informative displays of words. Messages
+  first, with pictures and video in support.
+- **MatrixPrism:** generative streams of artistic expression matched to
+  music, composed on a laptop and streamed as DDP.
 - **matrix-jack**, the receiver (`matrix-dmx`): Art-Net, sACN, and DDP in.
   It is moving out of MatrixPrism into its own repository, to be shared by
   both as a submodule.
@@ -438,11 +439,14 @@ Built beyond the MVP list: text effects and colour styles, bundled display fonts
 Not built yet:
 
 - **A companion app that designs signs with an LLM** (Sign Studio): slogans and full message styles, checked with the sign's own renderer, guided by ratings of existing media and messages (given by users or inferred from use, such as play counts and how many playlists include an item), and delivered as importable design packs. See [docs/companion-designer-plan.md](docs/companion-designer-plan.md).
+- **Text reveals and transitions:** letters that type on, rise, or drop in before a message settles; a neon power-on; feathered wipe, glitch, and neon transitions between items; eased slides; a globe scroll; and an optional dark backing plate. Eight were prototyped at 96×64 and all fit the Pi's frame budget. See [docs/text-transitions-plan.md](docs/text-transitions-plan.md).
+- **Live data and charts on the sign** (eventually): fetch data from a chosen source, format it, and insert it into the display, as a message whose text fills from the data or as a chart drawn for the panel (a big number with a trend line, a few bars, progress toward a goal). No plan yet; it fits Protest's role as the informative sign, and its sources would need care because the sign is often offline.
 - **Counting street sounds** with a USB microphone: car horns, shouting, crowds, sirens, counted on the device without keeping any audio. See [docs/sound-events-plan.md](docs/sound-events-plan.md).
-- **Enclosure and power sensors** on `i2c0` (GPIO 0/1, the only free pins): an SHT31/SHT45 for enclosure temperature and humidity, and INA226/INA228 with an external 50 A shunt on the panels' 5 V feed.
+- **Battery and power awareness.** The first sign runs from a battery pack carried on a wheelchair, so power is runtime and weight. The biggest draws are video and animations with white or yellow backgrounds: white lights all three LED colours and yellow two, frame after frame. Plan: estimate each item's average and peak draw from its frames when the background worker processes it (calibrated from the measured 14–15 A on near-white plus a black-screen reading), show heavy items in the library, estimate runtime from the pack's watt-hours, and offer an optional limiter that dims frames above a set draw, as WLED's brightness limiter does. Bright white is wanted for its impact, so the aim is to manage the draw, not remove the white: cap the peak (the fuse risk), and keep the playlist's average down (battery life) by spacing heavy items between light ones. The INA226/INA228 would replace the estimate with a measurement.
+- **Sensors, through a Pi Pico 2 sensor agent** on USB, so no Pi pins are needed: a VEML7700 for ambient light (automatic brightness), an SHT45 for enclosure temperature and humidity, an INA228 with an external 50 A shunt on the panels' 5 V feed (sampled fast enough to catch peaks, with a hardware over-current alert), and an INA226 on the battery side. The two DIY packs' BMSes are read over isolated UARTs on the Pico 2; the EcoFlow Delta Pro 3 is read through EcoFlow's cloud API only when the sign has internet. Optional fan control and physical buttons. See [docs/sensor-agent-plan.md](docs/sensor-agent-plan.md).
 - **Receiving Art-Net, sACN, and DDP** with MatrixPrism's `matrix-dmx` as a submodule, so any pixel sender (LedFx, xLights, MatrixPrism's composer) can drive the sign, but only after a connected person approves the display request over a new real-time notification channel. The sign is invisible as a receiver by default and after every power-up; an admin opts in to receiving and to being discoverable. See [docs/protocol-receiver-plan.md](docs/protocol-receiver-plan.md). Sending to WLED panels was dropped ([docs/wled-output-plan.md](docs/wled-output-plan.md)).
 - **Upstream internet through a phone.** A phone joined to the sign's Wi-Fi cannot share its connection back over the same link. This needs USB tethering or a second Wi-Fi adapter joining the phone's hotspot, plus NAT.
 - **Access control.** The Wi-Fi passphrase is the only protection. An operator PIN is planned, needed first for approving live input.
-- **Brightness scheduling.** Brightness and gamma are adjustable, but not yet by time of day.
+- **Automatic brightness.** Brightness and gamma are adjustable, but not yet automatic. The panels are outdoor 1/8-scan panels, chosen to be seen in daylight, so full brightness in sun is the normal daytime setting. Following an ambient light sensor is better than a time-of-day schedule, since it handles cloud, shade, and dusk, and it is the biggest power saver: dimming only when it is darker keeps full impact in daylight.
 - **Restoring a backup from the web UI.** The README documents the manual steps.
 - **Drag-and-drop reordering.** Items move with up/down buttons.

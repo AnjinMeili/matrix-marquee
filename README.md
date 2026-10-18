@@ -1,7 +1,7 @@
 # Protest RGB Matrix Appliance
 
-DietPi appliance software for a Raspberry Pi 4 driving a 96x64 RGB LED matrix
-as a protest sign. Everything is controlled from a phone over the sign's own
+DietPi appliance software for a Raspberry Pi 4 driving an RGB LED matrix of
+any size as a protest sign (the first build is 96x64). Everything is controlled from a phone over the sign's own
 Wi-Fi; no internet connection is needed.
 
 ## What it does
@@ -105,9 +105,12 @@ overwrite it. Notable settings:
 - `MATRIX_PLAYER_AP_SSID`, `MATRIX_PLAYER_AP_ACTIVE`,
   `MATRIX_PLAYER_UPSTREAM_INTERFACE` — shown in the UI only.
 
-The viewing area is 96x64. The driver uses the supplied initialization
-string, whose raw framebuffer is 64x96 and is rotated by the configured
-mapper:
+The sign can be any size: set `MATRIX_PLAYER_MATRIX_WIDTH` and
+`MATRIX_PLAYER_MATRIX_HEIGHT` to the viewing area and the `MATRIX_*` driver
+settings to the panels. Text, borders, effects, transitions, and the web
+previews all scale to it. The first build's viewing area is 96x64. Its driver
+uses the supplied initialization string, whose raw framebuffer is 64x96 and is
+rotated by the configured mapper:
 
 ```text
 --led-rows=32 --led-cols=64 --led-chain=1 --led-parallel=3

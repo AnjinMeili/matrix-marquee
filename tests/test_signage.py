@@ -384,6 +384,29 @@ def test_scroll_directions_move_opposite_ways() -> None:
     assert TextRenderer("HELLO WORLD", (96, 64), TextStyle(effect="scroll_right")).cycle_seconds > 3
 
 
+@pytest.mark.parametrize("size", [(64, 32), (96, 64), (192, 64), (128, 128), (384, 128), (256, 256)])
+def test_text_looks_the_same_on_signs_of_any_size(size) -> None:
+    """Sign sizes vary by build, so pacing and borders scale with the sign rather than in fixed pixels."""
+    reference = TextRenderer("NO KINGS", (192, 128), TextStyle(effect="scroll"))
+    scroll = TextRenderer("NO KINGS", (size[0] * 2, size[1] * 2), TextStyle(effect="scroll"))
+    same_shape = TextRenderer("NO KINGS", size, TextStyle(effect="scroll"))
+    # The same shape at twice the size scrolls by in the same time.
+    assert scroll.cycle_seconds == pytest.approx(same_shape.cycle_seconds, rel=0.1)
+    assert reference.cycle_seconds == pytest.approx(
+        TextRenderer("NO KINGS", (96, 64), TextStyle(effect="scroll")).cycle_seconds, rel=0.1
+    )
+
+    frame = TextRenderer("NO KINGS", size, TextStyle(border_style="double", border_color="#ff0000")).frame(0)
+    unit = max(1, round(size[1] / 64))
+    # A double border is two lines, each one unit thick: the outer one then a gap.
+    for x in range(unit):
+        assert frame.getpixel((x, size[1] // 2)) == (255, 0, 0)
+    assert frame.getpixel((unit, size[1] // 2)) != (255, 0, 0)
+    # Text still fills the sign: tall signs are not held to a maximum font size.
+    text_height = TextRenderer("NO", size, TextStyle(color_value="#ffffff", outline=False)).frame(0).getbbox()
+    assert text_height[3] - text_height[1] > size[1] * 0.5
+
+
 def test_motion_speed_paces_scrolling(tmp_path: Path) -> None:
     def seconds_per_pass(speed: str) -> float:
         style = TextStyle(effect="scroll", motion_speed=speed)

@@ -174,6 +174,9 @@
     $("#stop-button").disabled = !active;
 
     const matrix = status.matrix;
+    // Previews take the sign's shape and pixel grid from its real size, which varies by build.
+    document.documentElement.style.setProperty("--sign-w", matrix.width);
+    document.documentElement.style.setProperty("--sign-h", matrix.height);
     $("#health-matrix").textContent = `${matrix.width} × ${matrix.height} ${matrix.connected ? "connected" : "unavailable"}`;
     renderHealthSummary(status.health);
     $("#health-storage").textContent = `${formatBytes(status.storage.free_bytes)} free`;

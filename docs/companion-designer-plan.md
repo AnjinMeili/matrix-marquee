@@ -100,7 +100,8 @@ Tools, all `strict: true`:
 **Readability rules**, measured rather than guessed. The renderer already
 auto-fits text, so the font size it picks is the signal:
 
-- reject below about 16 px glyph height at 96×64, meaning too many words;
+- reject below about a quarter of the sign's height in glyph height (16 px
+  at 96×64), meaning too many words;
 - at most three lines;
 - text against background (or against the outline) at a contrast ratio of
   at least 4.5;
