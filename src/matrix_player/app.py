@@ -103,6 +103,7 @@ def create_app(
         app.state.health.start()
         app.state.usage.start()
         app.state.proxies.start()
+        app.state.storage.fit_cache.start()
         app.state.proxies.submit_missing(
             row["filename"]
             for row in app.state.database.fetch_all(
@@ -157,6 +158,7 @@ def create_app(
         finally:
             app.state.health.close()
             app.state.proxies.close()
+            app.state.storage.fit_cache.close()
             try:
                 app.state.playback.close()
             except Exception:

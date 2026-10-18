@@ -9,6 +9,7 @@ widest at the sign's edge. The last step is cut where the gap ends.
 A pixel grows in both directions as it steps outward: a step *n* wide turns each
 pixel into an *n* by *n* square. Neighbouring squares overlap and are combined
 with a blend operator, so the bar blurs more and more toward the sign's edge.
+The "none" operator skips that and keeps each stretched pixel crisp.
 """
 
 from functools import lru_cache
@@ -22,6 +23,7 @@ DEFAULT_BLUR = "average"
 
 # Each operator combines the overlapping pixels (last axis) as floats in 0..1.
 BLURS = {
+    "none": None,  # crisp: pixels are only stretched, never blended
     "average": lambda a: a.mean(axis=-1),
     "lighten": lambda a: a.max(axis=-1),
     "screen": lambda a: 1.0 - np.prod(1.0 - a, axis=-1),
@@ -63,7 +65,7 @@ def fibonacci_widths(gap: int, limit: int) -> List[int]:
 
 def _blurred(line: np.ndarray, size: int, operator) -> np.ndarray:
     """Each pixel of *line* (rows, 3) becomes a *size*-tall square; overlaps are combined."""
-    if size <= 1:
+    if size <= 1 or operator is None:
         return line
     before = size // 2
     padded = np.pad(line, ((before, size - 1 - before), (0, 0)), mode="edge").astype(np.float32) / 255.0

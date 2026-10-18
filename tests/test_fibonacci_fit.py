@@ -97,6 +97,14 @@ def test_the_bars_blur_more_toward_the_sign_edge() -> None:
     assert spread == sorted(spread) and spread[-1] > spread[0] * 4
 
 
+def test_crisp_keeps_each_pixel_a_flat_block() -> None:
+    picture = gradient((100, 40))
+    out = np.asarray(FibonacciFit(picture.size, (140, 40)).apply(picture, "none"))
+    array = np.asarray(picture)
+    assert np.array_equal(out[:, 17], array[:, 2]) and np.array_equal(out[:, 16], array[:, 2])
+    assert np.array_equal(out[:, 0], array[:, 5])  # the outermost step is one source line, unblended
+
+
 def test_every_blur_keeps_the_picture_and_stays_in_range() -> None:
     picture = gradient((60, 40))
     fit = FibonacciFit(picture.size, (110, 40))
@@ -167,3 +175,138 @@ def test_older_database_gains_the_blur_column(tmp_path: Path) -> None:
         connection.execute("ALTER TABLE playlist_items DROP COLUMN fit_blur")
     database.initialize()
     assert "fit_blur" in [r[1] for r in database.fetch_all("PRAGMA table_info(playlist_items)")]
+
+
+# Fitted frames kept on disk -------------------------------------------------
+
+from matrix_player.rendering import Frame, FrameSource  # noqa: E402
+from matrix_player.rendering.fitcache import FitCache  # noqa: E402
+
+
+class CountingSource(FrameSource):
+    runs = 0
+
+    def __init__(self, size=(32, 16), frames=5) -> None:
+        self.size, self.frames = size, frames
+
+    def __iter__(self):
+        CountingSource.runs += 1
+        for index in range(self.frames):
+            yield Frame(Image.new("RGB", self.size, (index * 40, 10, 10)), 0.05 + index / 100)
+
+
+def built(cache: FitCache, key: str, factory, size=(32, 16)) -> bool:
+    from test_signage import wait_for
+
+    cache.submit(key, factory, size)
+    return wait_for(lambda: cache.get(key, size) is not None, timeout=5)
+
+
+@pytest.fixture
+def cache(tmp_path: Path):
+    fit_cache = FitCache(tmp_path / "fitted", max_bytes=10_000_000)
+    fit_cache.start()
+    yield fit_cache
+    fit_cache.close()
+
+
+def test_frames_are_worked_out_once_and_read_back_exactly(cache: FitCache, tmp_path: Path) -> None:
+    media = tmp_path / "clip.gif"
+    media.write_bytes(b"x")
+    key = cache.key("clip", media, (32, 16), "fibonacci", "average")
+    CountingSource.runs = 0
+    assert built(cache, key, CountingSource)
+    assert CountingSource.runs == 1
+    for _ in range(2):  # a cached source can be played again and again
+        frames = list(cache.get(key, (32, 16)))
+        assert [f.duration for f in frames] == pytest.approx([0.05 + i / 100 for i in range(5)])
+        assert [f.image.getpixel((0, 0)) for f in frames] == [(i * 40, 10, 10) for i in range(5)]
+    assert CountingSource.runs == 1
+    assert cache.submit(key, CountingSource, (32, 16)) is False  # already built
+
+
+def test_the_key_changes_with_the_file_the_size_and_the_fit(tmp_path: Path) -> None:
+    media = tmp_path / "clip.gif"
+    media.write_bytes(b"x")
+    base = FitCache.key("clip", media, (32, 16), "fibonacci", "average")
+    assert base == FitCache.key("clip", media, (32, 16), "fibonacci", "average")
+    assert base != FitCache.key("clip", media, (32, 16), "fibonacci", "none")
+    assert base != FitCache.key("clip", media, (64, 32), "fibonacci", "average")
+    media.write_bytes(b"changed")
+    assert base != FitCache.key("clip", media, (32, 16), "fibonacci", "average")
+
+
+def test_a_clip_too_big_to_keep_plays_live_and_is_not_retried(tmp_path: Path) -> None:
+    from test_signage import wait_for
+
+    small = FitCache(tmp_path / "fitted", max_bytes=4 * 32 * 16 * 3 * 2)  # room for two frames per file
+    small.start()
+    try:
+        small.submit("clip-big", CountingSource, (32, 16))
+        assert wait_for(lambda: small.is_skipped("clip-big"), timeout=5)
+        assert small.get("clip-big", (32, 16)) is None
+        assert not list((tmp_path / "fitted").glob("*.rgb*"))
+        assert small.submit("clip-big", CountingSource, (32, 16)) is False
+    finally:
+        small.close()
+
+
+def test_a_wrong_sized_or_truncated_file_is_ignored(cache: FitCache, tmp_path: Path) -> None:
+    media = tmp_path / "clip.gif"
+    media.write_bytes(b"x")
+    key = cache.key("clip", media, (32, 16), "fibonacci", "average")
+    assert built(cache, key, CountingSource)
+    assert cache.get(key, (64, 32)) is None
+    raw = cache.directory / f"{key}.rgb"
+    raw.write_bytes(raw.read_bytes()[:-5])
+    assert cache.get(key, (32, 16)) is None
+
+
+def test_the_oldest_files_are_pruned_past_the_limit_and_deleting_media_removes_its_files(tmp_path: Path) -> None:
+    import os
+
+    frame = 32 * 16 * 3
+    pruned = FitCache(tmp_path / "fitted", max_bytes=frame * 20)  # a file may use a quarter: 5 frames
+    pruned.start()
+    try:
+        for index, name in enumerate(["a-1", "b-1", "c-1", "d-1", "e-1"]):
+            assert built(pruned, name, CountingSource)
+            os.utime(pruned.directory / f"{name}.json", (1000 + index, 1000 + index))
+        pruned.prune(keep="e-1")
+        assert pruned.get("a-1", (32, 16)) is None and pruned.get("e-1", (32, 16)) is not None
+        pruned.remove_media("e")
+        assert pruned.get("e-1", (32, 16)) is None
+    finally:
+        pruned.close()
+
+
+def test_a_fibonacci_gif_plays_live_first_then_from_the_cache(tmp_path: Path) -> None:
+    from matrix_player.playback import build_media_source
+    from matrix_player.rendering import GifFrameSource
+    from matrix_player.rendering.fitcache import CachedFrameSource
+    from matrix_player.storage import MediaStorage
+    from test_signage import make_settings, wait_for
+
+    settings = make_settings(tmp_path)
+    settings.ensure_directories()
+    storage = MediaStorage(settings)
+    storage.fit_cache.start()
+    try:
+        frames = [Image.new("RGB", (40, 30), (i * 60, 50, 90)) for i in range(4)]
+        frames[0].save(settings.media_dir / "anim.gif", save_all=True, append_images=frames[1:], duration=80, loop=0)
+        size = (96, 64)
+        first = build_media_source(storage, "anim.gif", size, 5.0, "fibonacci", "gif", "average")
+        assert isinstance(first, GifFrameSource)  # nothing waits for the cache
+        live = [np.asarray(f.image) for f in first]
+        assert wait_for(lambda: isinstance(
+            build_media_source(storage, "anim.gif", size, 5.0, "fibonacci", "gif", "average"), CachedFrameSource
+        ), timeout=5)
+        cached = build_media_source(storage, "anim.gif", size, 5.0, "fibonacci", "gif", "average")
+        assert all(np.array_equal(a, np.asarray(b.image)) for a, b in zip(live, cached)) and len(live) == 4
+        # Other fits and other blurs are not served from it.
+        assert isinstance(build_media_source(storage, "anim.gif", size, 5.0, "fit", "gif"), GifFrameSource)
+        assert isinstance(build_media_source(storage, "anim.gif", size, 5.0, "fibonacci", "gif", "none"), GifFrameSource)
+        storage.delete("anim.gif", None)
+        assert not list(settings.fit_cache_path.glob("anim-*"))
+    finally:
+        storage.fit_cache.close()

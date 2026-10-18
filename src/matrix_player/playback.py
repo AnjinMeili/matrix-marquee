@@ -28,6 +28,7 @@ from .database import Database
 from .matrix import MatrixAdapter
 from .models import ItemType, PlaybackStatus, PlayBy, PlayMode
 from .rendering import (
+    FitMode,
     Frame,
     FrameSource,
     GifFrameSource,
@@ -586,6 +587,7 @@ def build_media_source(
     fit_mode: str,
     media_type: Optional[str] = None,
     fit_blur: str = "average",
+    build_cache: bool = True,
 ) -> FrameSource:
     if not filename:
         raise PlaybackError("media_not_found", "media record is missing")
@@ -595,10 +597,44 @@ def build_media_source(
     suffix = path.suffix.lower()
     # A one-frame GIF is stored as a still picture and is held like one.
     if suffix == ".gif" and media_type != "image":
-        return GifFrameSource(path, size, fit_mode, fit_blur=fit_blur)
+        return _fitted_once(
+            storage, filename, path, size, fit_mode, fit_blur, build_cache,
+            lambda: GifFrameSource(path, size, fit_mode, fit_blur=fit_blur),
+        )
     if suffix in VIDEO_SUFFIXES:
-        return VideoFrameSource(storage.playable_path(filename), size, fit_mode=fit_mode, fit_blur=fit_blur)
+        playable = storage.playable_path(filename)
+        return _fitted_once(
+            storage, filename, playable, size, fit_mode, fit_blur, build_cache,
+            lambda: VideoFrameSource(playable, size, fit_mode=fit_mode, fit_blur=fit_blur),
+        )
     return ImageFrameSource(path, size, duration, fit_mode, fit_blur)
+
+
+def _fitted_once(
+    storage: MediaStorage,
+    filename: str,
+    source_path: Path,
+    size: tuple,
+    fit_mode: str,
+    fit_blur: str,
+    build_cache: bool,
+    make_live: Callable[[], FrameSource],
+) -> FrameSource:
+    """Fibonastretch frames are worked out once and read back from disk; until the
+    file is ready (or if it is too big to keep) the live source plays as usual."""
+    if fit_mode != FitMode.FIBONACCI.value:
+        return make_live()
+    cache = storage.fit_cache
+    try:
+        key = cache.key(Path(filename).stem, source_path, size, fit_mode, fit_blur)
+    except OSError:
+        return make_live()
+    cached = cache.get(key, size)
+    if cached is not None:
+        return cached
+    if build_cache:
+        cache.submit(key, make_live, size)
+    return make_live()
 
 
 def build_text_source(

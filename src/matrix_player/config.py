@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import os
+from typing import Optional
 
 
 def _positive_int(name: str, default: int) -> int:
@@ -51,6 +52,12 @@ class Settings:
     matrix_pixel_mapper: str = "Rotate:90"
     matrix_pwm_lsb_nanoseconds: int = 160
     matrix_gpio_slowdown: int = 2
+    fit_cache_dir: Optional[Path] = None
+    fit_cache_max_bytes: int = 1024 * 1024 * 1024
+
+    @property
+    def fit_cache_path(self) -> Path:
+        return self.fit_cache_dir or self.data_dir / "fitted"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -80,6 +87,10 @@ class Settings:
             matrix_pixel_mapper=os.getenv("MATRIX_PIXEL_MAPPER", "Rotate:90"),
             matrix_pwm_lsb_nanoseconds=_positive_int("MATRIX_PWM_LSB_NANOSECONDS", 160),
             matrix_gpio_slowdown=_positive_int("MATRIX_GPIO_SLOWDOWN", 2),
+            fit_cache_dir=Path(
+                os.getenv("MATRIX_PLAYER_FIT_CACHE_DIR", str(data_dir / "fitted"))
+            ).expanduser().resolve(),
+            fit_cache_max_bytes=_positive_int("MATRIX_PLAYER_FIT_CACHE_MAX_BYTES", 1024 * 1024 * 1024),
         )
 
     def ensure_directories(self) -> None:

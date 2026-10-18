@@ -18,6 +18,7 @@ from PIL import Image, ImageSequence, UnidentifiedImageError
 
 from .config import Settings
 from .models import MediaType
+from .rendering.fitcache import FitCache
 
 
 ALLOWED_MIME_TYPES = {
@@ -81,6 +82,7 @@ class StoredMedia:
 class MediaStorage:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.fit_cache = FitCache(settings.fit_cache_path, settings.fit_cache_max_bytes)
         self._proxy_locks: Dict[str, threading.Lock] = {}
         self._proxy_locks_guard = threading.Lock()
 
@@ -270,5 +272,6 @@ class MediaStorage:
     def delete(self, filename: str, thumbnail: Optional[str]) -> None:
         self.media_path(filename).unlink(missing_ok=True)
         self.proxy_path(filename).unlink(missing_ok=True)
+        self.fit_cache.remove_media(Path(filename).stem)
         if thumbnail:
             self.thumbnail_path(thumbnail).unlink(missing_ok=True)

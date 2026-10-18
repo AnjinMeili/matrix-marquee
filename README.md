@@ -150,10 +150,21 @@ panel's power input, as the matrix library's wiring guide recommends.
   whole picture, stretch to fill, or "Stretch the edges to fill the bars"
   (Fibonastretch). The last fills the empty bars by stretching the picture's
   edge pixels outward in Fibonacci steps (1, 1, 2, 3, 5, ...), starting at the
-  picture's own edge and widest at the sign's edge, so there is no seam. Each pixel grows in both directions as it steps outward, and the overlapping neighbours are combined, so the bars blur more toward the sign's edge. The blur can be Blur (average, the default), Glow (lightest wins), Bright (screen), Dense (additive), or Dark (multiply); Bright and Dense wash the bars out to white. It lights
+  picture's own edge and widest at the sign's edge, so there is no seam. Each pixel grows in both directions as it steps outward, and the overlapping neighbours are combined, so the bars blur more toward the sign's edge. The blur can be Crisp (none: pixels are only stretched, so each keeps its clarity), Blur (average, the default), Glow (lightest wins), Bright (screen), Dense (additive), or Dark (multiply); Bright and Dense wash the bars out to white. It lights
   the bars, so bright pictures draw more power than with black bars. Video
   uses ffmpeg only to scale and draws the strips itself; if the video's size
   cannot be read it plays as "whole picture". See `docs/fibonastretch-plan.md`.
+- **Fitted frames are kept on disk.** The first time an animation or video plays
+  with the Fibonastretch fit, it plays live while a background worker writes the
+  fitted frames, at low priority, to `/var/lib/protest/fitted` as raw sign-size
+  frames. Every later play reads that file back with no fitting work. A clip
+  whose file would take more than a quarter of the limit
+  (`MATRIX_PLAYER_FIT_CACHE_MAX_BYTES`, 1 GiB) always plays live. The files are
+  derived, not backed up, and can be deleted at any time; the oldest are pruned
+  past the limit, and deleting the media deletes its files. A 96×64 frame is
+  18 KB, so 10 s at 30 fps is about 5 MB. Each combination of media, sign size,
+  fit, and blur is written once, so trying many blurs on one clip writes one
+  file each.
 - Deleting media that a playlist or message background uses is refused.
 
 ### Usage counters
