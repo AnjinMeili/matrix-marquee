@@ -18,4 +18,5 @@ htmlcov/
 backups/
 bundles/
 .DS_Store
+spec/
 
