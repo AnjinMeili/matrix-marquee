@@ -252,5 +252,8 @@ MATRIX_PLAYER_MATRIX_MODE=mock MATRIX_PLAYER_DATA_DIR=./data \
 ```
 
 Mock mode needs no GPIO. Tests that need `ffmpeg` are skipped when it is not
-installed. The web UI is plain HTML, CSS, and JavaScript with no build step
+installed. The suite includes a headless-Chrome check of every view at phone
+size (`tools/ui_check.py`, skipped without Chrome). After a deploy,
+`scripts/verify-deploy.sh` checks the sign itself, read-only. Agent
+instructions are in `AGENTS.md`, with project skills in `.claude/skills/`. The web UI is plain HTML, CSS, and JavaScript with no build step
 and no external assets, so it works offline.
