@@ -41,9 +41,9 @@ for a sensor that must be wireless, such as one on a separate battery cart.
            I2C0 (GP4 SDA, GP5 SCL), 400 kHz            │
    ┌──────────────┬──────────────┬──────────────┬──────┘
    │              │              │              │
- VEML7700      SHT45          INA228         INA226
+ MAX44009      SHT45          INA228         INA226
  light         enclosure      panels' 5 V    battery side
- 0x10          0x44           0x40           0x41
+ 0x4A          0x44           0x40           0x41
                               ALERT → GP15
            I2C1 (GP6 SDA, GP7 SCL): optional second SHT45 at the air intake (0x44)
            UART0 (GP0 TX, GP1 RX) and UART1 (GP8 TX, GP9 RX), each through an isolator:
@@ -52,9 +52,20 @@ for a sensor that must be wireless, such as one on a separate battery cart.
            GP18–GP20: buttons (optional)
 ```
 
-- **Light (VEML7700, 0x10).** Reads to about 120,000 lux, so full sun doesn't
-  saturate it as it does a BH1750. Mount it at the sign's top edge, facing the
-  viewers and hooded from the LEDs, so it never sees the sign's own light.
+- **Light (MAX44009, 0x4A; the owner's choice, ordered).**
+  - **Range:** reads from 0.045 to 188,000 lux and switches range by itself,
+    so it covers night to full sun without saturating. A BH1750 saturates
+    near 65,000 lux, below full sun. A VEML7700 (0x10, to about 120,000 lux)
+    is the fallback.
+  - **Reading it:** the lux value's two bytes must be read in one I2C
+    transaction, with a repeated start, or a range change between the reads
+    gives a wrong value.
+  - **Address:** the A0 pin selects 0x4B for a second sensor.
+  - **Mounting:** at the sign's top edge, facing the viewers and hooded from
+    the LEDs, so it never sees the sign's own light.
+  - **Sun on the panels:** dark panels in full sun gain heat on top of their
+    own. Plotting light level beside enclosure temperature shows how much the
+    sun adds.
 - **Enclosure (SHT45, 0x44).**
   - Main sensor: at the top rear, on the exhaust side behind the panels.
   - Optional second sensor at the intake, to show whether the fans are
