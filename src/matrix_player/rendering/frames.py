@@ -237,7 +237,7 @@ class VideoFrameSource(FrameSource):
         fps = self._detected_fps()
         width, height = self.size
         fills_bars = False
-        if self.fit_mode in (FitMode.FIBONACCI, FitMode.TILE):
+        if self.fit_mode in (FitMode.FIBONACCI, FitMode.MIRROR):
             probed = self._probe_size()
             if probed is not None:
                 # ffmpeg only scales; the bars are drawn here, per frame.

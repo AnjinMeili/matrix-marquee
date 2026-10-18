@@ -1,5 +1,5 @@
 from .fibonacci import DEFAULT_BLUR, blur_names
-from .fit import FitMode, contained_size, fill_bars, fit_image, tile_fill
+from .fit import FitMode, contained_size, fill_bars, fit_image, mirror_fill
 from .frames import (
     Frame,
     FrameSource,
@@ -40,6 +40,6 @@ __all__ = [
     "preview_frames",
     "render_text",
     "style_from_mapping",
-    "tile_fill",
+    "mirror_fill",
     "transition_frames",
 ]

@@ -21,7 +21,12 @@ class FitMode(str, Enum):
     LETTERBOX = "letterbox"
     STRETCH = "stretch"
     FIBONACCI = "fibonacci"
-    TILE = "tile"
+    MIRROR = "mirror"
+
+    @classmethod
+    def _missing_(cls, value: object):
+        # "tile" shipped for a few hours before it became "mirror"; saved items still say it.
+        return cls.MIRROR if value == "tile" else None
 
 
 def contained_size(source: Tuple[int, int], size: Tuple[int, int]) -> Tuple[int, int]:
@@ -33,15 +38,22 @@ def contained_size(source: Tuple[int, int], size: Tuple[int, int]) -> Tuple[int,
     )
 
 
-def tile_fill(picture: Image.Image, size: Tuple[int, int]) -> Image.Image:
-    """The bars show the picture's other side, as a window cut from the middle of
-    three copies in a row (more if the bars are wider than the picture)."""
+def _mirrored_index(count: int, offset: int, length: int) -> np.ndarray:
+    """Source index for each output position: a reflection at both ends of the picture,
+    repeated back and forth if the bars are wider than the picture."""
+    position = (np.arange(length) - offset) % (2 * count)
+    return np.where(position < count, position, 2 * count - 1 - position)
+
+
+def mirror_fill(picture: Image.Image, size: Tuple[int, int]) -> Image.Image:
+    """Each bar is its own side of the picture reflected about the edge, like a window
+    cut from [mirrored copy | picture | mirrored copy], with the edge pixel doubled."""
     width, height = picture.size
     if (width, height) == tuple(size):
         return picture
     array = np.asarray(picture.convert("RGB"))
-    rows = (np.arange(size[1]) - (size[1] - height) // 2) % height
-    columns = (np.arange(size[0]) - (size[0] - width) // 2) % width
+    rows = _mirrored_index(height, (size[1] - height) // 2, size[1])
+    columns = _mirrored_index(width, (size[0] - width) // 2, size[0])
     return Image.fromarray(np.ascontiguousarray(array[rows][:, columns]))
 
 
@@ -49,8 +61,8 @@ def fill_bars(
     picture: Image.Image, size: Tuple[int, int], mode: Union[FitMode, str], blur: str = DEFAULT_BLUR
 ) -> Image.Image:
     """Fills the bars around a picture already fitted inside *size*."""
-    if FitMode(mode) is FitMode.TILE:
-        return tile_fill(picture, size)
+    if FitMode(mode) is FitMode.MIRROR:
+        return mirror_fill(picture, size)
     return fibonacci_fit_for(picture.size, size).apply(picture, blur)
 
 
@@ -70,7 +82,7 @@ def fit_image(
     if selected is FitMode.STRETCH:
         return source.resize(size, Image.Resampling.LANCZOS)
 
-    if selected in (FitMode.FIBONACCI, FitMode.TILE):
+    if selected in (FitMode.FIBONACCI, FitMode.MIRROR):
         picture = source.resize(contained_size(source.size, size), Image.Resampling.LANCZOS)
         return fill_bars(picture, size, selected, blur)
 

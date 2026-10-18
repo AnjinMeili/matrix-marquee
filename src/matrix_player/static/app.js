@@ -16,7 +16,7 @@
     ["rotate", "Spin in"], ["pixel_dissolve", "Sparkle"], ["none", "Instant"]
   ];
   const TRANSITION_LABEL = Object.fromEntries(TRANSITIONS);
-  const FIT_LABEL = { crop: "fills sign", fit: "whole picture", letterbox: "whole picture", stretch: "stretched", fibonacci: "edges stretched", tile: "repeated" };
+  const FIT_LABEL = { crop: "fills sign", fit: "whole picture", letterbox: "whole picture", stretch: "stretched", fibonacci: "edges stretched", mirror: "mirrored" };
   const MODE_LABEL = { loop: "In order", shuffle: "Shuffle", random: "Random", once: "Stops at the end" };
   const TYPE_LABEL = { image: "Picture", gif: "Animated GIF", video: "Video" };
 

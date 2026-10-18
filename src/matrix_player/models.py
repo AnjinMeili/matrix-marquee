@@ -48,7 +48,12 @@ class FitMode(str, Enum):
     LETTERBOX = "letterbox"
     STRETCH = "stretch"
     FIBONACCI = "fibonacci"
-    TILE = "tile"
+    MIRROR = "mirror"
+
+    @classmethod
+    def _missing_(cls, value: object):
+        # "tile" shipped for a few hours before it became "mirror"; saved items still say it.
+        return cls.MIRROR if value == "tile" else None
 
 
 class PlaybackStatus(str, Enum):
