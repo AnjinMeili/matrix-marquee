@@ -3,7 +3,7 @@ from typing import Tuple, Union
 
 from PIL import Image, ImageColor
 
-from .fibonacci import DEFAULT_BLEND, fibonacci_fit_for
+from .fibonacci import DEFAULT_BLUR, fibonacci_fit_for
 
 
 def pixel_unit(size: Tuple[int, int]) -> int:
@@ -36,7 +36,7 @@ def fit_image(
     size: Tuple[int, int],
     mode: Union[FitMode, str] = FitMode.LETTERBOX,
     background: Union[str, Tuple[int, int, int]] = "black",
-    blend: str = DEFAULT_BLEND,
+    blur: str = DEFAULT_BLUR,
 ) -> Image.Image:
     """Return an RGB image normalized to *size* without mutating the input."""
     width, height = size
@@ -49,7 +49,7 @@ def fit_image(
 
     if selected is FitMode.FIBONACCI:
         picture = source.resize(contained_size(source.size, size), Image.Resampling.LANCZOS)
-        return fibonacci_fit_for(picture.size, size).apply(picture, blend)
+        return fibonacci_fit_for(picture.size, size).apply(picture, blur)
 
     scale = (
         max(width / source.width, height / source.height)

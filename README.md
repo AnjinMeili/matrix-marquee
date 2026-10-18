@@ -149,9 +149,8 @@ panel's power input, as the matrix library's wiring guide recommends.
 - **Picture fit** is chosen per playlist item: fill the sign (trim edges), the
   whole picture, stretch to fill, or "Stretch the edges to fill the bars"
   (Fibonastretch). The last fills the empty bars by stretching the picture's
-  edge pixels outward in Fibonacci steps (1, 1, 2, 3, 5, ...), widest at the
-  sign's edge, and blends where the stretch overlaps the picture: Glow
-  (screen, the default), Brighter, Darker, Cut away, or Contrast. It lights
+  edge pixels outward in Fibonacci steps (1, 1, 2, 3, 5, ...), starting at the
+  picture's own edge and widest at the sign's edge, so there is no seam. Each pixel grows in both directions as it steps outward, and the overlapping neighbours are combined, so the bars blur more toward the sign's edge. The blur can be Blur (average, the default), Glow (lightest wins), Bright (screen), Dense (additive), or Dark (multiply); Bright and Dense wash the bars out to white. It lights
   the bars, so bright pictures draw more power than with black bars. Video
   uses ffmpeg only to scale and draws the strips itself; if the video's size
   cannot be read it plays as "whole picture". See `docs/fibonastretch-plan.md`.

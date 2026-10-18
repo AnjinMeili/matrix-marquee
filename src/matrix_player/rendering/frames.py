@@ -7,7 +7,7 @@ from typing import Iterator, List, Optional, Tuple, Union
 
 from PIL import Image, ImageSequence
 
-from .fibonacci import DEFAULT_BLEND, fibonacci_fit_for
+from .fibonacci import DEFAULT_BLUR, fibonacci_fit_for
 from .fit import FitMode, contained_size, fit_image
 from .text import SCROLL_EFFECTS, TextRenderer, TextStyle
 
@@ -37,13 +37,13 @@ class ImageFrameSource(FrameSource):
         size: Tuple[int, int],
         duration: float = 1.0,
         fit_mode: Union[FitMode, str] = FitMode.LETTERBOX,
-        fit_blend: str = DEFAULT_BLEND,
+        fit_blur: str = DEFAULT_BLUR,
     ) -> None:
         self.source = source
         self.size = size
         self.duration = duration
         self.fit_mode = fit_mode
-        self.fit_blend = fit_blend
+        self.fit_blur = fit_blur
 
     def __iter__(self) -> Iterator[Frame]:
         if isinstance(self.source, Image.Image):
@@ -51,7 +51,7 @@ class ImageFrameSource(FrameSource):
         else:
             with Image.open(self.source) as opened:
                 image = opened.copy()
-        yield Frame(fit_image(image, self.size, self.fit_mode, blend=self.fit_blend), self.duration)
+        yield Frame(fit_image(image, self.size, self.fit_mode, blur=self.fit_blur), self.duration)
 
 
 class GifFrameSource(FrameSource):
@@ -66,14 +66,14 @@ class GifFrameSource(FrameSource):
         fit_mode: Union[FitMode, str] = FitMode.LETTERBOX,
         max_frames: Optional[int] = None,
         default_duration: float = 0.1,
-        fit_blend: str = DEFAULT_BLEND,
+        fit_blur: str = DEFAULT_BLUR,
     ) -> None:
         if max_frames is not None and max_frames <= 0:
             raise ValueError("max_frames must be positive")
         self.path = Path(path)
         self.size = size
         self.fit_mode = fit_mode
-        self.fit_blend = fit_blend
+        self.fit_blur = fit_blur
         self.max_frames = max_frames
         self.default_duration = default_duration
         self._cache: Optional[List[Frame]] = None
@@ -90,7 +90,7 @@ class GifFrameSource(FrameSource):
                 milliseconds = image.info.get("duration", gif.info.get("duration", 0))
                 # Browsers treat sub-20ms GIF delays as 100ms; match them.
                 duration = milliseconds / 1000 if milliseconds and milliseconds >= 20 else self.default_duration
-                frame = Frame(fit_image(image.convert("RGBA"), self.size, self.fit_mode, blend=self.fit_blend), duration)
+                frame = Frame(fit_image(image.convert("RGBA"), self.size, self.fit_mode, blur=self.fit_blur), duration)
                 if decoded is not None:
                     decoded.append(frame)
                     if len(decoded) > self.MAX_CACHED_FRAMES:
@@ -164,7 +164,7 @@ class VideoFrameSource(FrameSource):
         ffmpeg: str = "ffmpeg",
         ffprobe: str = "ffprobe",
         fit_mode: Union[FitMode, str] = FitMode.FIT,
-        fit_blend: str = DEFAULT_BLEND,
+        fit_blur: str = DEFAULT_BLUR,
     ) -> None:
         if fps is not None and fps <= 0:
             raise ValueError("fps must be positive")
@@ -177,7 +177,7 @@ class VideoFrameSource(FrameSource):
         self.ffmpeg = ffmpeg
         self.ffprobe = ffprobe
         self.fit_mode = FitMode(fit_mode)
-        self.fit_blend = fit_blend
+        self.fit_blur = fit_blur
         self._fps: Optional[float] = None
         self._process: Optional["subprocess.Popen[bytes]"] = None
 
@@ -259,7 +259,7 @@ class VideoFrameSource(FrameSource):
                     break
                 frame = Image.frombytes("RGB", (width, height), data)
                 if fibonacci is not None:
-                    frame = fibonacci.apply(frame, self.fit_blend)
+                    frame = fibonacci.apply(frame, self.fit_blur)
                 yield Frame(frame, 1.0 / fps)
                 index += 1
         finally:

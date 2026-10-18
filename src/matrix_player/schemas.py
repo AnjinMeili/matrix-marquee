@@ -6,7 +6,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .models import FitMode, ItemType, MediaType, PlaybackStatus, PlayBy, PlayMode, TransitionType
-from .rendering.fibonacci import DEFAULT_BLEND, blend_names
+from .rendering.fibonacci import DEFAULT_BLUR, blur_names
 from .rendering.text import FONT_ALIASES, FONTS
 
 
@@ -153,13 +153,13 @@ class PlaylistItemBase(ApiModel):
     transition_type: TransitionType = TransitionType.NONE
     transition_duration_ms: int = Field(default=500, ge=0, le=60_000)
     fit_mode: FitMode = FitMode.FIT
-    fit_blend: str = DEFAULT_BLEND
+    fit_blur: str = DEFAULT_BLUR
 
-    @field_validator("fit_blend")
+    @field_validator("fit_blur")
     @classmethod
-    def known_blend(cls, value: str) -> str:
-        if value not in blend_names():
-            raise ValueError("unknown blend")
+    def known_blur(cls, value: str) -> str:
+        if value not in blur_names():
+            raise ValueError("unknown blur")
         return value
 
     @model_validator(mode="after")
@@ -230,14 +230,14 @@ class SendCommand(ApiModel):
     target_type: str = Field(pattern="^(media|text_panel|playlist)$")
     target_id: int = Field(ge=1)
     fit_mode: FitMode = FitMode.FIT
-    fit_blend: str = DEFAULT_BLEND
+    fit_blur: str = DEFAULT_BLUR
     duration_ms: Optional[int] = Field(default=None, ge=100, le=600000)
 
-    @field_validator("fit_blend")
+    @field_validator("fit_blur")
     @classmethod
-    def known_blend(cls, value: str) -> str:
-        if value not in blend_names():
-            raise ValueError("unknown blend")
+    def known_blur(cls, value: str) -> str:
+        if value not in blur_names():
+            raise ValueError("unknown blur")
         return value
 
 

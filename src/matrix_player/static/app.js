@@ -221,10 +221,10 @@
   const currentView = () => document.querySelector(".view:not([hidden])")?.id || "dashboard";
 
   // Remembers where "Show now" was tapped so coming back lands on that element.
-  async function showNow(targetType, targetId, label, fitMode = "crop", anchor = null, fitBlend = "screen") {
+  async function showNow(targetType, targetId, label, fitMode = "crop", anchor = null, fitBlur = "average") {
     try {
       const origin = currentView();
-      await send("/api/playback/send", { target_type: targetType, target_id: targetId, fit_mode: fitMode, fit_blend: fitBlend });
+      await send("/api/playback/send", { target_type: targetType, target_id: targetId, fit_mode: fitMode, fit_blur: fitBlur });
       state.returnTo = origin !== "dashboard" ? { view: origin, anchor } : null;
       notice(`“${label}” is on the sign.`);
       await refreshStatus();
@@ -488,7 +488,7 @@
           el("button", { class: "icon-button", "aria-label": "Move up", text: "↑", disabled: index === 0, onclick: () => moveItem(playlist, item, index - 1) }),
           el("button", { class: "icon-button", "aria-label": "Move down", text: "↓", disabled: index === playlist.items.length - 1, onclick: () => moveItem(playlist, item, index + 1) }),
           el("button", { class: "icon-button", "aria-label": "Change", text: "✎", onclick: () => openItemDialog({ playlistId: playlist.id, item }) }),
-          el("button", { class: "icon-button", "aria-label": "Show now", text: "▶", onclick: () => showNow(target.kind, target.id, target.name, item.fit_mode, `item-${item.id}`, item.fit_blend) }),
+          el("button", { class: "icon-button", "aria-label": "Show now", text: "▶", onclick: () => showNow(target.kind, target.id, target.name, item.fit_mode, `item-${item.id}`, item.fit_blur) }),
           el("button", { class: "icon-button danger", "aria-label": "Remove", text: "✕", onclick: () => removeItem(playlist, item) })));
     });
     fill(editor,
@@ -549,7 +549,7 @@
       transition_type: item.transition_type,
       transition_duration_ms: item.transition_duration_ms,
       fit_mode: item.fit_mode,
-      fit_blend: item.fit_blend,
+      fit_blur: item.fit_blur,
       ...overrides
     };
   }
@@ -651,7 +651,7 @@
       form.elements.play_by.value = item.play_by;
       ensureOption(form.elements.transition_duration, item.transition_duration_ms, `${item.transition_duration_ms} ms`);
       form.elements.fit_mode.value = item.fit_mode === "letterbox" ? "fit" : item.fit_mode;
-      form.elements.fit_blend.value = item.fit_blend || "screen";
+      form.elements.fit_blur.value = item.fit_blur || "average";
     }
     syncItemFields();
     $("#item-preview").removeAttribute("src");
@@ -718,7 +718,7 @@
     $("#item-repeats-row").hidden = !animated;
     if (!animated) form.elements.play_by.value = "time";
     $("#item-fit-row").hidden = type !== "media";
-    $("#item-blend-row").hidden = type !== "media" || form.elements.fit_mode.value !== "fibonacci";
+    $("#item-blur-row").hidden = type !== "media" || form.elements.fit_mode.value !== "fibonacci";
     updateItemInfo();
   }
 
@@ -737,7 +737,7 @@
       transition_type: fields.transition.value,
       transition_duration_ms: Number(fields.transition_duration.value),
       fit_mode: fields.fit_mode.value,
-      fit_blend: fields.fit_blend.value
+      fit_blur: fields.fit_blur.value
     };
     return { playlistId, id, body };
   }

@@ -10,8 +10,8 @@ import pytest
 
 from matrix_player import models
 from matrix_player.database import Database
-from matrix_player.rendering import FitMode, VideoFrameSource, blend_names, contained_size, fit_image
-from matrix_player.rendering.fibonacci import BLENDS, FibonacciFit, fibonacci_widths
+from matrix_player.rendering import FitMode, VideoFrameSource, blur_names, contained_size, fit_image
+from matrix_player.rendering.fibonacci import BLURS, FibonacciFit, fibonacci_widths
 
 
 def gradient(size) -> Image.Image:
@@ -24,20 +24,20 @@ def gradient(size) -> Image.Image:
 def test_the_spec_example_640x480_on_1024x1024() -> None:
     assert contained_size((640, 480), (1024, 1024)) == (1024, 768)
     widths = fibonacci_widths(128, 10_000)
-    assert widths == [55, 34, 21, 13, 8, 5, 3, 2, 1, 1]
-    assert sum(widths) == 143 and sum(widths) - 128 == 15
-    assert sum(fibonacci_widths(88, 100)) == 88  # up to 34 sums to 88
+    # 1, 1, 2, 3, 5, 8, 13, 21, 34 sum to 88; the next term, 55, is cut to the 40 left.
+    assert widths == [1, 1, 2, 3, 5, 8, 13, 21, 34, 40]
+    assert sum(widths) == 128
 
 
 @pytest.mark.parametrize("gap", [1, 2, 3, 7, 50, 129, 1000])
-def test_widths_cover_the_gap_and_end_at_one(gap) -> None:
+def test_widths_fill_the_gap_exactly_and_grow_outward(gap) -> None:
     widths = fibonacci_widths(gap, 10_000)
-    assert sum(widths) >= gap
-    assert widths[-1] == 1
-    assert widths[0] == max(widths)
+    assert sum(widths) == gap
+    assert widths[0] == 1
+    assert widths[:-1] == sorted(widths[:-1])
 
 
-def test_thin_sources_take_the_shortfall_in_the_outer_line() -> None:
+def test_thin_sources_take_the_shortfall_in_the_last_line() -> None:
     widths = fibonacci_widths(100, 3)
     assert len(widths) == 3 and sum(widths) == 100
 
@@ -54,22 +54,28 @@ def test_output_is_exactly_the_sign_size_on_any_sign(size, source) -> None:
         assert np.array_equal(np.asarray(out), np.asarray(fitted))
 
 
-def test_outer_strip_repeats_the_picture_edge_and_far_side_mirrors() -> None:
+def test_strip_continues_the_picture_edge_and_grows_outward() -> None:
     picture = gradient((100, 40))
     fit = FibonacciFit(picture.size, (140, 40))
-    out = np.asarray(fit.apply(picture, "normal"))
+    out = np.asarray(fit.apply(picture))
     array = np.asarray(picture)
     assert out.shape == (40, 140, 3)
-    assert np.array_equal(out[:, 0], array[:, 0])
-    assert np.array_equal(out[:, -1], array[:, -1])
-    # Outermost source line is the widest strip step.
-    assert np.array_equal(out[:, 0], out[:, 5])
+    assert np.array_equal(out[:, 20:120], array)  # the picture is untouched
+    # Next to the picture, lines 0 and 1 each take one pixel (no blur at size 1),
+    # then line 2 takes two, blurred over two rows.
+    assert np.array_equal(out[:, 19], array[:, 0])
+    assert np.array_equal(out[:, 18], array[:, 1])
+    assert np.array_equal(out[:, 17], out[:, 16])
+    assert np.abs(out[:, 17].astype(int) - array[:, 2].astype(int)).max() <= 8
+    # The far side mirrors it.
+    assert np.array_equal(out[:, 120], array[:, -1])
+    assert np.array_equal(out[:, 121], array[:, -2])
 
 
 def test_vertical_gap_works_like_horizontal() -> None:
     picture = gradient((40, 100))
-    horizontal = FibonacciFit((100, 40), (140, 40)).apply(picture.transpose(Image.Transpose.TRANSPOSE), "screen")
-    vertical = FibonacciFit((40, 100), (40, 140)).apply(picture, "screen")
+    horizontal = FibonacciFit((100, 40), (140, 40)).apply(picture.transpose(Image.Transpose.TRANSPOSE))
+    vertical = FibonacciFit((40, 100), (40, 140)).apply(picture)
     assert np.array_equal(np.asarray(vertical), np.asarray(horizontal).transpose(1, 0, 2))
 
 
@@ -83,36 +89,34 @@ def test_no_gap_leaves_the_picture_alone() -> None:
     assert np.array_equal(np.asarray(fit_image(picture, (96, 64), "fibonacci")), np.asarray(picture))
 
 
-def test_every_blend_stays_in_range_and_unknown_means_screen() -> None:
+def test_the_bars_blur_more_toward_the_sign_edge() -> None:
+    picture = np.zeros((64, 60, 3), dtype=np.uint8)
+    picture[30:34, :] = 255  # a thin bright line across the picture
+    out = np.asarray(FibonacciFit((60, 64), (200, 64)).apply(Image.fromarray(picture)))
+    spread = [int((out[:, x, 0] > 0).sum()) for x in (69, 60, 40, 20, 0)]  # near the picture ... the edge
+    assert spread == sorted(spread) and spread[-1] > spread[0] * 4
+
+
+def test_every_blur_keeps_the_picture_and_stays_in_range() -> None:
     picture = gradient((60, 40))
-    fit = FibonacciFit(picture.size, (110, 40))  # 25 px a side: strips of 33 overlap by 8
-    results = {name: np.asarray(fit.apply(picture, name)) for name in blend_names()}
-    assert {"screen", "additive", "multiply", "subtractive", "overlay"} <= set(results)
-    assert np.array_equal(np.asarray(fit.apply(picture, "nonsense")), results["screen"])
-    assert not np.array_equal(results["screen"], results["multiply"])
+    fit = FibonacciFit(picture.size, (110, 40))
+    for name in blur_names():
+        out = np.asarray(fit.apply(picture, name))
+        assert np.array_equal(out[:, 25:85], np.asarray(picture))
+    assert {"average", "lighten", "screen", "additive", "multiply"} <= set(BLURS)
+    assert np.array_equal(np.asarray(fit.apply(picture, "nonsense")), np.asarray(fit.apply(picture, "average")))
 
 
-def test_blend_formulas_on_a_worked_pixel() -> None:
-    b, s = np.float32(0.5), np.float32(0.5)
-    assert BLENDS["screen"](b, s) == pytest.approx(0.75)
-    assert BLENDS["additive"](b, s) == pytest.approx(1.0)
-    assert BLENDS["multiply"](b, s) == pytest.approx(0.25)
-    assert BLENDS["subtractive"](b, s) == pytest.approx(0.0)
-    assert BLENDS["overlay"](np.float32(0.25), s) == pytest.approx(0.25)
+def test_average_keeps_a_flat_colour_and_screen_washes_it_out() -> None:
+    flat = Image.new("RGB", (60, 40), (90, 120, 150))
+    fit = FibonacciFit(flat.size, (160, 40))
+    average = np.asarray(fit.apply(flat, "average"))
+    assert (average == (90, 120, 150)).all()
+    assert np.asarray(fit.apply(flat, "screen"))[:, 0].min() > 200
 
 
 def test_the_two_fit_mode_lists_agree() -> None:
     assert {m.value for m in models.FitMode} == {m.value for m in FitMode}
-
-
-def test_older_database_gains_the_blend_column(tmp_path: Path) -> None:
-    database = Database(tmp_path / "old.sqlite3")
-    database.initialize()
-    with database.connect() as connection:
-        connection.execute("ALTER TABLE playlist_items DROP COLUMN fit_blend")
-    assert "fit_blend" not in [r[1] for r in database.fetch_all("PRAGMA table_info(playlist_items)")]
-    database.initialize()
-    assert "fit_blend" in [r[1] for r in database.fetch_all("PRAGMA table_info(playlist_items)")]
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
@@ -135,7 +139,7 @@ def test_video_whose_size_cannot_be_read_falls_back_to_fit(tmp_path: Path) -> No
     assert source._probe_size() is None
 
 
-def test_blend_choice_round_trips_through_the_api(tmp_path: Path) -> None:
+def test_fibonacci_fit_round_trips_through_the_api(tmp_path: Path) -> None:
     from fastapi.testclient import TestClient
 
     from matrix_player.app import create_app
@@ -146,10 +150,20 @@ def test_blend_choice_round_trips_through_the_api(tmp_path: Path) -> None:
         panel = client.post("/api/text-panels", json={"name": "P", "content": "HI"}).json()
         playlist = client.post("/api/playlists", json={"name": "L"}).json()
         url = f"/api/playlists/{playlist['id']}/items"
-        body = {"item_type": "text_panel", "text_panel_id": panel["id"], "fit_mode": "fibonacci", "fit_blend": "overlay"}
+        body = {"item_type": "text_panel", "text_panel_id": panel["id"], "fit_mode": "fibonacci", "fit_blur": "lighten"}
         item = client.post(url, json=body).json()
-        assert (item["fit_mode"], item["fit_blend"]) == ("fibonacci", "overlay")
-        assert client.post(url, json={**body, "fit_blend": "bogus"}).status_code == 422
-        assert client.post(url, json={k: v for k, v in body.items() if k != "fit_blend"}).json()["fit_blend"] == "screen"
+        assert (item["fit_mode"], item["fit_blur"]) == ("fibonacci", "lighten")
+        assert client.post(url, json={**body, "fit_blur": "bogus"}).status_code == 422
+        plain = {k: v for k, v in body.items() if k != "fit_blur"}
+        assert client.post(url, json=plain).json()["fit_blur"] == "average"
         duplicate = client.post(f"/api/playlists/{playlist['id']}/duplicate").json()
-        assert duplicate["items"][0]["fit_blend"] == "overlay"
+        assert duplicate["items"][0]["fit_blur"] == "lighten"
+
+
+def test_older_database_gains_the_blur_column(tmp_path: Path) -> None:
+    database = Database(tmp_path / "old.sqlite3")
+    database.initialize()
+    with database.connect() as connection:
+        connection.execute("ALTER TABLE playlist_items DROP COLUMN fit_blur")
+    database.initialize()
+    assert "fit_blur" in [r[1] for r in database.fetch_all("PRAGMA table_info(playlist_items)")]

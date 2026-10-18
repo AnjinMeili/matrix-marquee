@@ -284,13 +284,13 @@
           <option value="stretch">Stretch to fill</option>
           <option value="fibonacci">Stretch the edges to fill the bars</option>
         </select></label>
-        <label id="item-blend-row" class="full" hidden>Where the edges meet the picture<select name="fit_blend">
-          <option value="screen">Glow</option>
-          <option value="additive">Brighter</option>
-          <option value="multiply">Darker</option>
-          <option value="subtractive">Cut away</option>
-          <option value="overlay">Contrast</option>
-        </select><span class="form-help">Fills the empty bars, which uses more battery on bright pictures.</span></label>
+        <label id="item-blur-row" class="full" hidden>How the edges blur<select name="fit_blur">
+          <option value="average">Blur</option>
+          <option value="lighten">Glow</option>
+          <option value="screen">Bright</option>
+          <option value="additive">Dense</option>
+          <option value="multiply">Dark</option>
+        </select><span class="form-help">Bright and Dense fill the bars with light, which uses more battery.</span></label>
       </div>
       <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary" id="item-submit">Add</button></div>
     </form>

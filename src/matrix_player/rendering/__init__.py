@@ -1,4 +1,4 @@
-from .fibonacci import DEFAULT_BLEND, blend_names
+from .fibonacci import DEFAULT_BLUR, blur_names
 from .fit import FitMode, contained_size, fit_image
 from .frames import (
     Frame,
@@ -20,7 +20,7 @@ from .text import (
 from .transitions import Transition, transition_frames
 
 __all__ = [
-    "DEFAULT_BLEND",
+    "DEFAULT_BLUR",
     "FitMode",
     "Frame",
     "FrameSource",
@@ -31,8 +31,8 @@ __all__ = [
     "TextStyle",
     "Transition",
     "VideoFrameSource",
-    "blend_names",
     "contained_size",
+    "blur_names",
     "fit_image",
     "font_choices",
     "load_background",

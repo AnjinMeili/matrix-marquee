@@ -109,7 +109,7 @@ class PreviewRenderer:
                 raise PlaybackError("media_not_found", "media not found")
             source = build_media_source(
                 self.storage, row["filename"], self.size, duration, str(item["fit_mode"]),
-                row["media_type"], str(item.get("fit_blend") or "screen"),
+                row["media_type"], str(item.get("fit_blur") or "average"),
             )
             return source, row["media_type"] != "image"
         row = self.database.fetch_one(text_query("tp.id = ?"), (item["text_panel_id"],))
