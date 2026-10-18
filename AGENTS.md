@@ -44,8 +44,10 @@ session.
 
 ## Environment
 
-- **Local machine:** macOS with Python 3.9 and no ffmpeg. The ffmpeg tests are
-  skipped there, so check video work on the Pi.
+- **Local machine:** macOS with Python 3.9 and ffmpeg from Homebrew, so the
+  ffmpeg tests run there. They are skipped if `ffmpeg` is not on `PATH`
+  (Homebrew's is `/opt/homebrew/bin`). Still check video work on the Pi, which
+  has the real decoder and frame budget.
 - **The sign:** DietPi, Python 3.13, Pillow 12.3, ffmpeg, and the
   rpi-rgb-led-matrix wheel. Reach it as `protest.local`; never write an IP
   address into the repo.

@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 PLAYLIST_FIELDS = ("name", "description", "is_default", "is_enabled", "play_mode")
 ITEM_FIELDS = (
     "item_type", "media_id", "text_panel_id", "duration_ms", "repeat_count",
-    "transition_type", "transition_duration_ms", "fit_mode", "play_by",
+    "transition_type", "transition_duration_ms", "fit_mode", "fit_blend", "play_by",
 )
 
 
@@ -141,9 +141,9 @@ def duplicate_playlist(
         connection.execute(
             """INSERT INTO playlist_items
                (playlist_id, position, item_type, media_id, text_panel_id, duration_ms,
-                repeat_count, transition_type, transition_duration_ms, fit_mode, play_by)
+                repeat_count, transition_type, transition_duration_ms, fit_mode, fit_blend, play_by)
                SELECT ?, position, item_type, media_id, text_panel_id, duration_ms,
-                      repeat_count, transition_type, transition_duration_ms, fit_mode, play_by
+                      repeat_count, transition_type, transition_duration_ms, fit_mode, fit_blend, play_by
                FROM playlist_items WHERE playlist_id = ?""",
             (new_id, playlist_id),
         )

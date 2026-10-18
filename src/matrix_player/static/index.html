@@ -282,7 +282,15 @@
           <option value="crop">Fill the sign (trim edges)</option>
           <option value="fit">Show the whole picture</option>
           <option value="stretch">Stretch to fill</option>
+          <option value="fibonacci">Stretch the edges to fill the bars</option>
         </select></label>
+        <label id="item-blend-row" class="full" hidden>Where the edges meet the picture<select name="fit_blend">
+          <option value="screen">Glow</option>
+          <option value="additive">Brighter</option>
+          <option value="multiply">Darker</option>
+          <option value="subtractive">Cut away</option>
+          <option value="overlay">Contrast</option>
+        </select><span class="form-help">Fills the empty bars, which uses more battery on bright pictures.</span></label>
       </div>
       <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary" id="item-submit">Add</button></div>
     </form>

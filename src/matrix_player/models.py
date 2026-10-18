@@ -47,6 +47,7 @@ class FitMode(str, Enum):
     CROP = "crop"
     LETTERBOX = "letterbox"
     STRETCH = "stretch"
+    FIBONACCI = "fibonacci"
 
 
 class PlaybackStatus(str, Enum):

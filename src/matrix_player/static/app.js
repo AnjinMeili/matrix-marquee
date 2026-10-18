@@ -16,7 +16,7 @@
     ["rotate", "Spin in"], ["pixel_dissolve", "Sparkle"], ["none", "Instant"]
   ];
   const TRANSITION_LABEL = Object.fromEntries(TRANSITIONS);
-  const FIT_LABEL = { crop: "fills sign", fit: "whole picture", letterbox: "whole picture", stretch: "stretched" };
+  const FIT_LABEL = { crop: "fills sign", fit: "whole picture", letterbox: "whole picture", stretch: "stretched", fibonacci: "edges stretched" };
   const MODE_LABEL = { loop: "In order", shuffle: "Shuffle", random: "Random", once: "Stops at the end" };
   const TYPE_LABEL = { image: "Picture", gif: "Animated GIF", video: "Video" };
 
@@ -221,10 +221,10 @@
   const currentView = () => document.querySelector(".view:not([hidden])")?.id || "dashboard";
 
   // Remembers where "Show now" was tapped so coming back lands on that element.
-  async function showNow(targetType, targetId, label, fitMode = "crop", anchor = null) {
+  async function showNow(targetType, targetId, label, fitMode = "crop", anchor = null, fitBlend = "screen") {
     try {
       const origin = currentView();
-      await send("/api/playback/send", { target_type: targetType, target_id: targetId, fit_mode: fitMode });
+      await send("/api/playback/send", { target_type: targetType, target_id: targetId, fit_mode: fitMode, fit_blend: fitBlend });
       state.returnTo = origin !== "dashboard" ? { view: origin, anchor } : null;
       notice(`“${label}” is on the sign.`);
       await refreshStatus();
@@ -488,7 +488,7 @@
           el("button", { class: "icon-button", "aria-label": "Move up", text: "↑", disabled: index === 0, onclick: () => moveItem(playlist, item, index - 1) }),
           el("button", { class: "icon-button", "aria-label": "Move down", text: "↓", disabled: index === playlist.items.length - 1, onclick: () => moveItem(playlist, item, index + 1) }),
           el("button", { class: "icon-button", "aria-label": "Change", text: "✎", onclick: () => openItemDialog({ playlistId: playlist.id, item }) }),
-          el("button", { class: "icon-button", "aria-label": "Show now", text: "▶", onclick: () => showNow(target.kind, target.id, target.name, item.fit_mode, `item-${item.id}`) }),
+          el("button", { class: "icon-button", "aria-label": "Show now", text: "▶", onclick: () => showNow(target.kind, target.id, target.name, item.fit_mode, `item-${item.id}`, item.fit_blend) }),
           el("button", { class: "icon-button danger", "aria-label": "Remove", text: "✕", onclick: () => removeItem(playlist, item) })));
     });
     fill(editor,
@@ -549,6 +549,7 @@
       transition_type: item.transition_type,
       transition_duration_ms: item.transition_duration_ms,
       fit_mode: item.fit_mode,
+      fit_blend: item.fit_blend,
       ...overrides
     };
   }
@@ -650,6 +651,7 @@
       form.elements.play_by.value = item.play_by;
       ensureOption(form.elements.transition_duration, item.transition_duration_ms, `${item.transition_duration_ms} ms`);
       form.elements.fit_mode.value = item.fit_mode === "letterbox" ? "fit" : item.fit_mode;
+      form.elements.fit_blend.value = item.fit_blend || "screen";
     }
     syncItemFields();
     $("#item-preview").removeAttribute("src");
@@ -716,6 +718,7 @@
     $("#item-repeats-row").hidden = !animated;
     if (!animated) form.elements.play_by.value = "time";
     $("#item-fit-row").hidden = type !== "media";
+    $("#item-blend-row").hidden = type !== "media" || form.elements.fit_mode.value !== "fibonacci";
     updateItemInfo();
   }
 
@@ -733,7 +736,8 @@
       play_by: fields.play_by.value,
       transition_type: fields.transition.value,
       transition_duration_ms: Number(fields.transition_duration.value),
-      fit_mode: fields.fit_mode.value
+      fit_mode: fields.fit_mode.value,
+      fit_blend: fields.fit_blend.value
     };
     return { playlistId, id, body };
   }
@@ -1458,7 +1462,7 @@
       schedulePreview();
     }
     if (event.target.id === "item-type") { populateItemContent(); syncItemFields(); }
-    if (event.target.id === "item-content") syncItemFields();
+    if (event.target.id === "item-content" || event.target.name === "fit_mode") syncItemFields();
     if (event.target.name === "play_by") updateItemInfo();
     if (event.target.closest("#item-form")) scheduleItemPreview();
     if (event.target.id === "media-filter") renderMedia();

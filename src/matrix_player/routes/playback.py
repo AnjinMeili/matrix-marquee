@@ -79,7 +79,8 @@ def send(
             state = playback.start(command.target_id)
         elif command.target_type == "media":
             state = playback.send_media(
-                command.target_id, command.fit_mode.value, command.duration_ms
+                command.target_id, command.fit_mode.value, command.duration_ms,
+                fit_blend=command.fit_blend,
             )
         else:
             state = playback.send_text_panel(command.target_id, command.duration_ms)

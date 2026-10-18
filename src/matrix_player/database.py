@@ -121,6 +121,7 @@ COLUMN_MIGRATIONS = (
     ("text_panels", "motion_speed", "TEXT NOT NULL DEFAULT 'normal'"),
     # When an item joined its playlist, to spot items dropped soon after.
     ("playlist_items", "added_at", "TEXT DEFAULT NULL"),
+    ("playlist_items", "fit_blend", "TEXT NOT NULL DEFAULT 'screen'"),
     (
         "text_panels",
         "background_media_id",

@@ -3,6 +3,8 @@ from typing import Tuple, Union
 
 from PIL import Image, ImageColor
 
+from .fibonacci import DEFAULT_BLEND, fibonacci_fit_for
+
 
 def pixel_unit(size: Tuple[int, int]) -> int:
     """Whole pixels that match one pixel on a 64-pixel-tall sign, for borders and shakes.
@@ -17,6 +19,16 @@ class FitMode(str, Enum):
     CROP = "crop"
     LETTERBOX = "letterbox"
     STRETCH = "stretch"
+    FIBONACCI = "fibonacci"
+
+
+def contained_size(source: Tuple[int, int], size: Tuple[int, int]) -> Tuple[int, int]:
+    """The source scaled to sit inside *size* with its shape kept."""
+    scale = min(size[0] / source[0], size[1] / source[1])
+    return (
+        min(size[0], max(1, round(source[0] * scale))),
+        min(size[1], max(1, round(source[1] * scale))),
+    )
 
 
 def fit_image(
@@ -24,6 +36,7 @@ def fit_image(
     size: Tuple[int, int],
     mode: Union[FitMode, str] = FitMode.LETTERBOX,
     background: Union[str, Tuple[int, int, int]] = "black",
+    blend: str = DEFAULT_BLEND,
 ) -> Image.Image:
     """Return an RGB image normalized to *size* without mutating the input."""
     width, height = size
@@ -33,6 +46,10 @@ def fit_image(
     source = image.convert("RGB")
     if selected is FitMode.STRETCH:
         return source.resize(size, Image.Resampling.LANCZOS)
+
+    if selected is FitMode.FIBONACCI:
+        picture = source.resize(contained_size(source.size, size), Image.Resampling.LANCZOS)
+        return fibonacci_fit_for(picture.size, size).apply(picture, blend)
 
     scale = (
         max(width / source.width, height / source.height)

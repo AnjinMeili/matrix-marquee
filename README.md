@@ -146,6 +146,15 @@ panel's power input, as the matrix library's wiring guide recommends.
   the Pi can decode it.
 - Animated GIFs play frame by frame from the original on the sign. For the
   phone's player, a GIF gets an MP4 copy the first time it is opened.
+- **Picture fit** is chosen per playlist item: fill the sign (trim edges), the
+  whole picture, stretch to fill, or "Stretch the edges to fill the bars"
+  (Fibonastretch). The last fills the empty bars by stretching the picture's
+  edge pixels outward in Fibonacci steps (1, 1, 2, 3, 5, ...), widest at the
+  sign's edge, and blends where the stretch overlaps the picture: Glow
+  (screen, the default), Brighter, Darker, Cut away, or Contrast. It lights
+  the bars, so bright pictures draw more power than with black bars. Video
+  uses ffmpeg only to scale and draws the strips itself; if the video's size
+  cannot be read it plays as "whole picture". See `docs/fibonastretch-plan.md`.
 - Deleting media that a playlist or message background uses is refused.
 
 ### Usage counters

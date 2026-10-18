@@ -6,6 +6,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .models import FitMode, ItemType, MediaType, PlaybackStatus, PlayBy, PlayMode, TransitionType
+from .rendering.fibonacci import DEFAULT_BLEND, blend_names
 from .rendering.text import FONT_ALIASES, FONTS
 
 
@@ -152,6 +153,14 @@ class PlaylistItemBase(ApiModel):
     transition_type: TransitionType = TransitionType.NONE
     transition_duration_ms: int = Field(default=500, ge=0, le=60_000)
     fit_mode: FitMode = FitMode.FIT
+    fit_blend: str = DEFAULT_BLEND
+
+    @field_validator("fit_blend")
+    @classmethod
+    def known_blend(cls, value: str) -> str:
+        if value not in blend_names():
+            raise ValueError("unknown blend")
+        return value
 
     @model_validator(mode="after")
     def validate_target(self) -> "PlaylistItemBase":
@@ -221,7 +230,15 @@ class SendCommand(ApiModel):
     target_type: str = Field(pattern="^(media|text_panel|playlist)$")
     target_id: int = Field(ge=1)
     fit_mode: FitMode = FitMode.FIT
+    fit_blend: str = DEFAULT_BLEND
     duration_ms: Optional[int] = Field(default=None, ge=100, le=600000)
+
+    @field_validator("fit_blend")
+    @classmethod
+    def known_blend(cls, value: str) -> str:
+        if value not in blend_names():
+            raise ValueError("unknown blend")
+        return value
 
 
 class PlaybackState(ApiModel):

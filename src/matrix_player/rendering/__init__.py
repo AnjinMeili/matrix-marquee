@@ -1,4 +1,5 @@
-from .fit import FitMode, fit_image
+from .fibonacci import DEFAULT_BLEND, blend_names
+from .fit import FitMode, contained_size, fit_image
 from .frames import (
     Frame,
     FrameSource,
@@ -19,6 +20,7 @@ from .text import (
 from .transitions import Transition, transition_frames
 
 __all__ = [
+    "DEFAULT_BLEND",
     "FitMode",
     "Frame",
     "FrameSource",
@@ -29,6 +31,8 @@ __all__ = [
     "TextStyle",
     "Transition",
     "VideoFrameSource",
+    "blend_names",
+    "contained_size",
     "fit_image",
     "font_choices",
     "load_background",

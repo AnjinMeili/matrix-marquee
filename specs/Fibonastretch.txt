@@ -1,0 +1,9 @@
+Modify media on playback to fit display by using a fibonacci sequence of pixel munging.  
+First, fit the media to the display until at least one dimension is equal and the other smaller.
+On the smaller dimension, use a fibonacci sequence to count pixels from each edge until equal.
+   - A 640x480 media, played back on a 1024x1024 screen is first upscaled to 1024x768
+   - the X dimension is short 256 pixels, or 128 per side. The fibonacci series from 1 would be
+      { 1, 2, 3, 5, 8, 13, 21, 34, 55 } At 34, the total sum of series is 88 and at 55 is 143.
+   - from each X edge, scale pixels following the fibonacci series to expand the media to fit the frame.
+   - when pixels overlap, blend from an operator select list including, but not exclusive to 
+      { screen, addttive, multiply, subtractive, overlay } with the default being screen.
