@@ -10,7 +10,7 @@ session.
 
 1. [README.md](README.md): what the sign does, install, configuration, media
    handling, backups, display tuning.
-2. [PROJECT_PLAN.md](PROJECT_PLAN.md) §12–13: decisions on record, what is built
+2. [PROJECT_PLAN.md](PROJECT_PLAN.md) §12–14: decisions on record, the related applications, what is built
    and what is open.
 3. The `docs/*-plan.md` for a feature before building it. Plans exist for the
    LLM sign designer, street-sound counting, and WLED output.
@@ -33,7 +33,7 @@ session.
   explicitly. End a change by saying which one is next rather than doing it.
 - **Commit straight to `main`**, and push only when asked.
 - **"Plan" means a document, not code.** Write `docs/<topic>-plan.md` and add a
-  line to `PROJECT_PLAN.md` §13.
+  line to `PROJECT_PLAN.md` §14 ("Status and open items").
 - **The owner builds the hardware and knows it well,** so technical hardware
   detail is welcome. The sign's UI is for non-technical protesters, so its copy
   stays plain.

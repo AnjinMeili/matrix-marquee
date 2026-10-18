@@ -1,7 +1,8 @@
-# Plan: stream the sign to WLED panels (deferred)
+# Plan: stream the sign to WLED panels (dropped)
 
-**Status:** planned, not built. Saved for later on 2026-10-17; it may not be
-needed if people build their own Pi signs from this project.
+**Status:** dropped on 2026-10-17. The owner is no longer considering sending
+from the sign; only receiving is planned. See
+[protocol-receiver-plan.md](protocol-receiver-plan.md). Kept for reference.
 
 ## The request
 

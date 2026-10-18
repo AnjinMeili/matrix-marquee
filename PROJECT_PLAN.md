@@ -415,7 +415,23 @@ The questions this section originally listed have been settled as follows:
 6. **Brightness:** not configurable yet (see below).
 7. **Deleting referenced media:** blocked while a playlist item or message background uses it.
 
-## 13. Status and open items
+## 13. Related applications
+
+This sign is one of three applications for managing matrix displays with
+varied information:
+
+- **Protest**, this repository: the sign's player and manager.
+- **MatrixPrism:** music-driven visuals composed on a laptop and streamed
+  as DDP.
+- **matrix-jack**, the receiver (`matrix-dmx`): Art-Net, sACN, and DDP in.
+  It is moving out of MatrixPrism into its own repository, to be shared by
+  both as a submodule.
+
+They meet at standard protocols (DDP, Art-Net, sACN) and mDNS discovery,
+rather than shared code. See
+[docs/protocol-receiver-plan.md](docs/protocol-receiver-plan.md).
+
+## 14. Status and open items
 
 Built beyond the MVP list: text effects and colour styles, bundled display fonts, play modes (loop, shuffle, random, once) with resume, media tags with batch selection and grouping, a whole-sign backup download, a live panel mirror, heat and power monitoring, brightness and gamma control with a test card, and the `protest.local` name over mDNS.
 
@@ -424,9 +440,9 @@ Not built yet:
 - **A companion app that designs signs with an LLM** (Sign Studio): slogans and full message styles, checked with the sign's own renderer, guided by ratings of existing media and messages (given by users or inferred from use, such as play counts and how many playlists include an item), and delivered as importable design packs. See [docs/companion-designer-plan.md](docs/companion-designer-plan.md).
 - **Counting street sounds** with a USB microphone: car horns, shouting, crowds, sirens, counted on the device without keeping any audio. See [docs/sound-events-plan.md](docs/sound-events-plan.md).
 - **Enclosure and power sensors** on `i2c0` (GPIO 0/1, the only free pins): an SHT31/SHT45 for enclosure temperature and humidity, and INA226/INA228 with an external 50 A shunt on the panels' 5 V feed.
-- **Streaming to WLED panels** over DDP. Deferred; see [docs/wled-output-plan.md](docs/wled-output-plan.md).
+- **Receiving Art-Net, sACN, and DDP** with MatrixPrism's `matrix-dmx` as a submodule, so any pixel sender (LedFx, xLights, MatrixPrism's composer) can drive the sign, but only after a connected person approves the display request over a new real-time notification channel. The sign is invisible as a receiver by default and after every power-up; an admin opts in to receiving and to being discoverable. See [docs/protocol-receiver-plan.md](docs/protocol-receiver-plan.md). Sending to WLED panels was dropped ([docs/wled-output-plan.md](docs/wled-output-plan.md)).
 - **Upstream internet through a phone.** A phone joined to the sign's Wi-Fi cannot share its connection back over the same link. This needs USB tethering or a second Wi-Fi adapter joining the phone's hotspot, plus NAT.
-- **Access control.** The Wi-Fi passphrase is the only protection.
+- **Access control.** The Wi-Fi passphrase is the only protection. An operator PIN is planned, needed first for approving live input.
 - **Brightness scheduling.** Brightness and gamma are adjustable, but not yet by time of day.
 - **Restoring a backup from the web UI.** The README documents the manual steps.
 - **Drag-and-drop reordering.** Items move with up/down buttons.
