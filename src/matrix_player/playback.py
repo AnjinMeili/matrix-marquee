@@ -27,6 +27,7 @@ from PIL import Image
 from .database import Database
 from .matrix import MatrixAdapter
 from .models import ItemType, PlaybackStatus, PlayBy, PlayMode
+from .rendering.mixer import Mix, MixFrameSource
 from .rendering import (
     FitMode,
     Frame,
@@ -331,7 +332,11 @@ class PlaybackService:
         source = self._source(item.source)
         limit = item.duration if item.play_by == PlayBy.TIME.value else None
         if limit is not None:
-            limit = max(limit, float(getattr(source, "min_seconds", 0.0)))
+            # A text reveal adds its own time in front, so reading time is not cut.
+            limit = max(
+                limit + float(getattr(source, "lead_seconds", 0.0)),
+                float(getattr(source, "min_seconds", 0.0)),
+            )
         loops = item.repeats
         wants_transition = previous is not None and Transition(item.transition) is not Transition.CUT
         current = previous
@@ -576,6 +581,7 @@ TEXT_COLUMNS = (
     "content", "font_family", "font_size", "bold", "italic", "alignment",
     "color_mode", "color_value", "outline", "outline_color", "border_style",
     "border_color", "effect", "accent_color", "background_color", "motion_speed",
+    "reveal", "backing",
 )
 
 
@@ -657,6 +663,24 @@ def build_text_source(
     )
 
 
+def build_overlay_source(media: FrameSource, overlay: Mapping[str, object], size: tuple) -> FrameSource:
+    """Words on top of a picture or video: ``overlay`` holds the mix and the message's style."""
+    if overlay.get("content") is None:
+        raise PlaybackError("text_panel_not_found", "the words on top are missing")
+    return MixFrameSource(
+        media, str(overlay["content"]), style_from_mapping(overlay), Mix.from_mapping(overlay), size
+    )
+
+
+def overlay_query(where: str) -> str:
+    """Selects item overlays with their message's style columns."""
+    columns = ", ".join(f"tp.{column}" for column in TEXT_COLUMNS)
+    return f"""SELECT io.*, {columns}
+               FROM item_overlays io
+               JOIN text_panels tp ON tp.id = io.text_panel_id
+               WHERE {where}"""
+
+
 def text_query(where: str) -> str:
     """Selects a text panel's style columns plus its background picture filename."""
     columns = ", ".join(f"tp.{column}" for column in TEXT_COLUMNS)
@@ -700,12 +724,16 @@ class DatabasePlaybackController:
     def _media_builder(
         self, filename: Optional[str], duration: float, fit_mode: str,
         media_type: Optional[str] = None, fit_blur: str = "average",
+        overlay: Optional[Mapping[str, object]] = None,
     ) -> Callable[[], FrameSource]:
         """Defers file checks to play time so one missing file only skips its item."""
-        return lambda: build_media_source(
-            self.storage, filename, self.service.matrix.size, duration, fit_mode, media_type,
-            fit_blur,
-        )
+        size = self.service.matrix.size
+
+        def build() -> FrameSource:
+            source = build_media_source(self.storage, filename, size, duration, fit_mode, media_type, fit_blur)
+            return source if overlay is None else build_overlay_source(source, overlay, size)
+
+        return build
 
     def _text_builder(self, row: Mapping[str, object], duration: float) -> Callable[[], FrameSource]:
         values = {key: row[key] for key in TEXT_COLUMNS}
@@ -727,13 +755,21 @@ class DatabasePlaybackController:
                WHERE pi.playlist_id = ? ORDER BY pi.position, pi.id""",
             (playlist_id,),
         )
+        overlays = {
+            row["item_id"]: dict(row)
+            for row in self.database.fetch_all(
+                overlay_query("io.item_id IN (SELECT id FROM playlist_items WHERE playlist_id = ?)"),
+                (playlist_id,),
+            )
+        }
         items: List[PlaybackItem] = []
         for row in rows:
             duration = row["duration_ms"] / 1000.0
             play_by = row["play_by"] or PlayBy.TIME.value
             if row["item_type"] == ItemType.MEDIA.value:
                 source = self._media_builder(
-                    row["filename"], duration, row["fit_mode"], row["media_type"], row["fit_blur"]
+                    row["filename"], duration, row["fit_mode"], row["media_type"], row["fit_blur"],
+                    overlays.get(row["id"]),
                 )
                 label = row["media_name"]
                 if row["media_type"] == "image":

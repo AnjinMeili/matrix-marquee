@@ -294,6 +294,40 @@
           <option value="multiply">Dark</option>
         </select><span class="form-help">Bright and Dense fill the bars with light, which uses more battery.</span></label>
       </div>
+      <fieldset class="timing" id="item-overlay" hidden>
+        <legend>Words on top</legend>
+        <label>Message<select name="overlay_panel" id="overlay-panel"></select></label>
+        <div class="form-grid" id="overlay-details">
+          <label>Where<select name="overlay_placement"><option value="full">Whole sign</option><option value="bottom">Bottom band</option><option value="top">Top band</option></select></label>
+          <label>Darken the picture<select name="overlay_dim"><option value="0">No</option><option value="25">A little</option><option value="40">Some</option><option value="60">A lot</option></select></label>
+          <div class="toggle-row full">
+            <label class="checkbox"><input name="overlay_blur" type="checkbox"> Blur behind words</label>
+            <label class="checkbox"><input name="overlay_halo" type="checkbox"> Soft halo</label>
+            <label class="checkbox"><input name="overlay_auto" type="checkbox"> Pick the clearest colour</label>
+          </div>
+          <details class="overlay-more full">
+            <summary>More ways to mix</summary>
+            <div class="form-grid">
+              <label>How they mix<select name="overlay_blend">
+                <option value="normal">Words over picture</option>
+                <option value="add">Add light</option>
+                <option value="screen">Brighten</option>
+                <option value="multiply">Darken through</option>
+                <option value="lighten">Brightest wins</option>
+                <option value="darken">Darkest wins</option>
+                <option value="difference">Difference</option>
+                <option value="overlay">Contrast boost</option>
+              </select></label>
+              <label>Strength<select name="overlay_opacity"><option value="100">Full</option><option value="75">Three quarters</option><option value="50">Half</option><option value="25">Faint</option></select></label>
+              <label>See-through<select name="overlay_key"><option value="none">Nothing</option><option value="black">Black parts</option><option value="color">One colour</option></select></label>
+              <label id="overlay-key-layer-row">Of<select name="overlay_key_layer"><option value="b">The words</option><option value="a">The picture</option></select></label>
+              <label id="overlay-key-color-row">Colour to remove<input name="overlay_key_color" type="color" value="#00ff00"></label>
+              <label id="overlay-tolerance-row">How much<select name="overlay_tolerance"><option value="15">A little</option><option value="30">Some</option><option value="50">A lot</option></select></label>
+            </div>
+            <p class="form-help">Add light and Brighten put more light on the sign, which uses more battery.</p>
+          </details>
+        </div>
+      </fieldset>
       <div class="dialog-actions"><button type="button" class="button" data-close-dialog>Cancel</button><button type="submit" class="button primary" id="item-submit">Add</button></div>
     </form>
   </dialog>
@@ -317,6 +351,7 @@
           <label class="checkbox"><input name="bold" type="checkbox"> <b>Bold</b></label>
           <label class="checkbox"><input name="italic" type="checkbox"> <i>Italic</i></label>
           <label class="checkbox"><input name="outline" type="checkbox" checked> Outline</label>
+          <label class="checkbox"><input name="backing" type="checkbox"> Dark box behind</label>
         </div>
         <label>Colour style<select name="color_mode">
           <option value="solid">One colour</option>
@@ -330,11 +365,20 @@
           <option value="none">Still</option>
           <option value="scroll">Scroll right to left ←</option>
           <option value="scroll_right">Scroll left to right →</option>
+          <option value="globe">Scroll round a globe ◐</option>
           <option value="pulse">Pulse</option>
           <option value="shake">Shake</option>
           <option value="flash">Flash on and off</option>
           <option value="pow">Comic POW burst</option>
           <option value="zoom">Punch in</option>
+        </select></label>
+        <label>How it appears<select name="reveal">
+          <option value="none">All at once</option>
+          <option value="typewriter">Typed out</option>
+          <option value="letters_rise">Letters rise up</option>
+          <option value="drop_in">Letters drop in</option>
+          <option value="matte_rise">Rises from a line</option>
+          <option value="neon">Neon lights up</option>
         </select></label>
         <label>Motion speed<select name="motion_speed"><option value="slow">Slow</option><option value="normal" selected>Normal</option><option value="fast">Fast</option></select></label>
         <label>Outline colour<input name="outline_color" type="color" value="#000000"></label>

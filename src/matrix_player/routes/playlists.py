@@ -2,7 +2,7 @@
 
 import logging
 import sqlite3
-from typing import List
+from typing import Dict, Iterable, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
@@ -11,6 +11,8 @@ from fastapi.responses import Response
 from ..database import Database
 from ..preview import PreviewRenderer
 from ..schemas import (
+    OVERLAY_FIELDS,
+    ItemOverlay,
     Playlist,
     PlaylistCreate,
     PlaylistItem,
@@ -36,17 +38,47 @@ def _db_value(value: object) -> object:
     return value.value if hasattr(value, "value") else value
 
 
+def _overlays(database: Database, where: str, parameters: tuple) -> Dict[int, ItemOverlay]:
+    return {
+        row["item_id"]: ItemOverlay.model_validate(dict(row))
+        for row in database.fetch_all(f"SELECT * FROM item_overlays WHERE {where}", parameters)
+    }
+
+
+def _with_overlays(rows: Iterable[sqlite3.Row], overlays: Dict[int, ItemOverlay]) -> List[PlaylistItem]:
+    return [PlaylistItem.model_validate({**dict(row), "overlay": overlays.get(row["id"])}) for row in rows]
+
+
+def _save_overlay(connection: sqlite3.Connection, item_id: int, overlay: Optional[ItemOverlay]) -> None:
+    """Replaces the item's words-on-top, or removes them when there are none."""
+    connection.execute("DELETE FROM item_overlays WHERE item_id = ?", (item_id,))
+    if overlay is None:
+        return
+    if connection.execute("SELECT id FROM text_panels WHERE id = ?", (overlay.text_panel_id,)).fetchone() is None:
+        raise HTTPException(status_code=422, detail="message for the words on top not found")
+    values = overlay.model_dump()
+    connection.execute(
+        f"INSERT INTO item_overlays (item_id, {','.join(OVERLAY_FIELDS)}) "
+        f"VALUES (?, {','.join('?' for _ in OVERLAY_FIELDS)})",
+        (item_id,) + tuple(values[field] for field in OVERLAY_FIELDS),
+    )
+
+
 def _playlist(playlist_id: int, database: Database) -> Playlist:
     row = database.fetch_one("SELECT * FROM playlists WHERE id = ?", (playlist_id,))
     if row is None:
         raise HTTPException(status_code=404, detail="playlist not found")
-    items = [
-        PlaylistItem.model_validate(dict(item))
-        for item in database.fetch_all(
+    items = _with_overlays(
+        database.fetch_all(
             "SELECT * FROM playlist_items WHERE playlist_id = ? ORDER BY position",
             (playlist_id,),
-        )
-    ]
+        ),
+        _overlays(
+            database,
+            "item_id IN (SELECT id FROM playlist_items WHERE playlist_id = ?)",
+            (playlist_id,),
+        ),
+    )
     values = dict(row)
     values["items"] = items
     return Playlist.model_validate(values)
@@ -138,15 +170,14 @@ def duplicate_playlist(
             ),
         )
         new_id = int(cursor.lastrowid)
-        connection.execute(
-            """INSERT INTO playlist_items
-               (playlist_id, position, item_type, media_id, text_panel_id, duration_ms,
-                repeat_count, transition_type, transition_duration_ms, fit_mode, fit_blur, play_by)
-               SELECT ?, position, item_type, media_id, text_panel_id, duration_ms,
-                      repeat_count, transition_type, transition_duration_ms, fit_mode, fit_blur, play_by
-               FROM playlist_items WHERE playlist_id = ?""",
-            (new_id, playlist_id),
-        )
+        for item in original.items:
+            values = item.model_dump()
+            copied = connection.execute(
+                f"""INSERT INTO playlist_items (playlist_id, position, {','.join(ITEM_FIELDS)})
+                    VALUES (?, ?, {','.join('?' for _ in ITEM_FIELDS)})""",
+                (new_id, item.position) + tuple(_db_value(values[field]) for field in ITEM_FIELDS),
+            )
+            _save_overlay(connection, int(copied.lastrowid), item.overlay)
     return _playlist(new_id, database)
 
 
@@ -182,11 +213,9 @@ def add_item(
                 _db_value(values[field]) for field in ITEM_FIELDS
             ),
         )
-        row = connection.execute(
-            "SELECT * FROM playlist_items WHERE id = ?", (cursor.lastrowid,)
-        ).fetchone()
-    logger.info("playlist_item_added", extra={"playlist_id": playlist_id, "item_id": row["id"]})
-    return PlaylistItem.model_validate(dict(row))
+        _save_overlay(connection, int(cursor.lastrowid), body.overlay)
+    logger.info("playlist_item_added", extra={"playlist_id": playlist_id, "item_id": cursor.lastrowid})
+    return _item(playlist_id, int(cursor.lastrowid), database)
 
 
 def _item(playlist_id: int, item_id: int, database: Database) -> PlaylistItem:
@@ -196,7 +225,7 @@ def _item(playlist_id: int, item_id: int, database: Database) -> PlaylistItem:
     )
     if row is None:
         raise HTTPException(status_code=404, detail="playlist item not found")
-    return PlaylistItem.model_validate(dict(row))
+    return _with_overlays([row], _overlays(database, "item_id = ?", (item_id,)))[0]
 
 
 @router.put("/{playlist_id}/items/{item_id}", response_model=PlaylistItem)
@@ -247,6 +276,7 @@ def update_item(
                 _db_value(values[field]) for field in ITEM_FIELDS
             ) + (item_id,),
         )
+        _save_overlay(connection, item_id, body.overlay)
     logger.info("playlist_item_updated", extra={"playlist_id": playlist_id, "item_id": item_id})
     return _item(playlist_id, item_id, database)
 

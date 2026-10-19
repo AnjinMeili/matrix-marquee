@@ -237,6 +237,14 @@ def run(out: Path) -> int:
                 ("message-editor", 'location.hash = "text"; document.querySelector("[data-action=new-text-panel]").click()'),
                 ("media-dialog", 'document.querySelectorAll("dialog[open]").forEach(d => d.close()); location.hash = "library"; '
                                  'document.querySelector("#media-grid [aria-label=\\"Name and tags\\"]").click()'),
+                # A picture with words on top, every mixing option showing.
+                ("item-dialog", 'document.querySelectorAll("dialog[open]").forEach(d => d.close()); location.hash = "playlists"; '
+                                'document.querySelector("#playlist-list .selection-item").click(); '
+                                '[...document.querySelectorAll("#playlist-editor button")].find(b => /Add/.test(b.textContent)).click(); '
+                                'const f = document.querySelector("#item-form").elements; '
+                                'for (const [name, value] of [["item_type", "media"], ["overlay_panel", f.overlay_panel.options[1].value], ["overlay_key", "color"]]) '
+                                '{ f[name].value = value; f[name].dispatchEvent(new Event("change", {bubbles: true})); } '
+                                'document.querySelector(".overlay-more").open = true'),
             ]
             for name, action in steps:
                 browser.evaluate(action)

@@ -17,6 +17,7 @@ from .playback import (
     PlaybackError,
     TEXT_COLUMNS,
     build_media_source,
+    build_overlay_source,
     build_text_source,
     text_query,
 )
@@ -111,6 +112,9 @@ class PreviewRenderer:
                 self.storage, row["filename"], self.size, duration, str(item["fit_mode"]),
                 row["media_type"], str(item.get("fit_blur") or "average"), build_cache=False,
             )
+            overlay = item.get("overlay")
+            if overlay:
+                source = build_overlay_source(source, self._overlay_values(overlay), self.size)
             return source, row["media_type"] != "image"
         row = self.database.fetch_one(text_query("tp.id = ?"), (item["text_panel_id"],))
         if row is None:
@@ -118,13 +122,21 @@ class PreviewRenderer:
         values = {key: row[key] for key in TEXT_COLUMNS}
         return build_text_source(self.storage, values, row["background_filename"], self.size, duration), False
 
+    def _overlay_values(self, overlay: Mapping[str, object]) -> Mapping[str, object]:
+        """Unsaved overlay settings plus the chosen message's style."""
+        row = self.database.fetch_one(text_query("tp.id = ?"), (overlay.get("text_panel_id"),))
+        if row is None:
+            raise PlaybackError("text_panel_not_found", "the words on top are missing")
+        return {**{key: row[key] for key in TEXT_COLUMNS}, **overlay}
+
     def _item_frames(self, item: Mapping[str, object], fps: float, cap: float) -> List[Image.Image]:
         source, animated = self._source(item)
         duration = int(item["duration_ms"]) / 1000.0
         if animated and item.get("play_by") == PlayBy.REPEATS.value:
             return sample(source, self.size, fps, cap, loops=int(item.get("repeat_count") or 1))
         minimum = float(getattr(source, "min_seconds", 0.0))
-        return sample(source, self.size, fps, min(cap, max(duration, minimum)))
+        lead = float(getattr(source, "lead_seconds", 0.0))
+        return sample(source, self.size, fps, min(cap, max(duration + lead, minimum)))
 
     def _entrance(
         self, previous: Image.Image, first: Image.Image, item: Mapping[str, object], fps: float

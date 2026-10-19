@@ -6,6 +6,7 @@ from typing import Iterator, Union
 import numpy as np
 from PIL import Image
 
+from .easing import ease_in_cubic, ease_out_cubic
 from .fit import pixel_unit
 
 
@@ -28,6 +29,22 @@ class Transition(str, Enum):
     FLASH = "flash"
     IMPACT = "impact"
     MORPH = "morph"
+    WIPE_LEFT = "wipe_left"
+    WIPE_RIGHT = "wipe_right"
+    WIPE_UP = "wipe_up"
+    WIPE_DOWN = "wipe_down"
+    GLITCH = "glitch"
+    NEON = "neon"
+
+
+WIPES = {
+    # The side a wipe starts from, as which axis it runs along and whether it runs backwards.
+    Transition.WIPE_LEFT: (1, True),
+    Transition.WIPE_RIGHT: (1, False),
+    Transition.WIPE_UP: (0, True),
+    Transition.WIPE_DOWN: (0, False),
+}
+WIPE_FEATHER = 0.2  # the soft band, as a fraction of the sign
 
 
 def _normalized(image: Image.Image, size: tuple) -> Image.Image:
@@ -76,6 +93,83 @@ def _morph_frames(old: Image.Image, new: Image.Image, frames: int) -> Iterator[I
     yield new.copy()
 
 
+def _wipe_frames(old: Image.Image, new: Image.Image, frames: int, axis: int, backwards: bool) -> Iterator[Image.Image]:
+    """A soft-edged wipe: a feathered band sweeps across, easing out as it lands."""
+    old_pixels = np.asarray(old, dtype=np.float32)
+    new_pixels = np.asarray(new, dtype=np.float32)
+    length = old_pixels.shape[axis]
+    along = (np.arange(length, dtype=np.float32) + 0.5) / length
+    if backwards:
+        along = 1.0 - along
+    for index in range(1, frames):
+        edge = ease_out_cubic(index / frames) * (1 + WIPE_FEATHER)
+        weight = np.clip((edge - along) / WIPE_FEATHER, 0.0, 1.0)
+        weight = weight[:, None, None] if axis == 0 else weight[None, :, None]
+        yield Image.fromarray((old_pixels + (new_pixels - old_pixels) * weight).round().astype(np.uint8))
+    yield new.copy()
+
+
+def _glitch(pixels: np.ndarray, strength: float, rng: random.Random, unit: int) -> np.ndarray:
+    """Slices of rows jump sideways and the colour channels split, more as strength grows."""
+    height = pixels.shape[0]
+    out = pixels.copy()
+    shift = max(1, round(6 * unit * strength))
+    row = 0
+    while row < height:
+        band = rng.randint(unit, 4 * unit)
+        if rng.random() < 0.6 * strength:
+            out[row: row + band] = np.roll(pixels[row: row + band], rng.randint(-shift, shift), axis=1)
+        row += band
+    split = round(2 * unit * strength)
+    if split:
+        out[..., 0] = np.roll(out[..., 0], split, axis=1)
+        out[..., 2] = np.roll(out[..., 2], -split, axis=1)
+    return out
+
+
+def _glitch_frames(old: Image.Image, new: Image.Image, frames: int, seed: int) -> Iterator[Image.Image]:
+    """The old picture breaks up, the new one takes over mid-way, and it settles clean.
+
+    Kept to slices and colour splits, with no brightness flashes.
+    """
+    rng = random.Random(seed)
+    unit = pixel_unit(old.size)
+    old_pixels = np.asarray(old)
+    new_pixels = np.asarray(new)
+    for index in range(1, frames):
+        progress = index / frames
+        strength = math.sin(math.pi * progress)
+        source = old_pixels if progress < 0.5 else new_pixels
+        yield Image.fromarray(_glitch(source, strength, rng, unit))
+    yield new.copy()
+
+
+# The old picture's brightness through a neon change: it sags once, recovers a
+# little, and dies; one flicker, so the panel never strobes.
+NEON_CURVE = ((0.0, 1.0), (0.15, 0.55), (0.3, 0.85), (0.6, 0.0), (1.0, 0.0))
+
+
+def _neon_frames(old: Image.Image, new: Image.Image, frames: int) -> Iterator[Image.Image]:
+    """The old message flickers and dims like a failing tube, then the new one snaps on."""
+    unit = pixel_unit(old.size)
+    black = Image.new("RGB", old.size)
+    snap = 0.8
+    for index in range(1, frames):
+        progress = index / frames
+        if progress >= snap:
+            yield new.copy()
+            continue
+        level = float(np.interp(progress, *zip(*NEON_CURVE)))
+        frame = Image.blend(black, old, level)
+        if 0.1 < progress < 0.35:
+            # A small wiggle while the tube struggles.
+            shifted = Image.new("RGB", old.size)
+            shifted.paste(frame, (unit if index % 2 else -unit, 0))
+            frame = shifted
+        yield frame
+    yield new.copy()
+
+
 def transition_frames(
     previous: Image.Image,
     incoming: Image.Image,
@@ -95,14 +189,15 @@ def transition_frames(
         return
 
     if kind in {Transition.FADE, Transition.FADE_IN}:
-        for index in range(1, frames + 1):
-            yield Image.blend(old, new, index / frames)
+        for index in range(1, frames):
+            yield Image.blend(old, new, ease_out_cubic(index / frames))
+        yield new.copy()
         return
     if kind is Transition.FADE_OUT:
         black = Image.new("RGB", size)
         for index in range(1, frames):
             phase = index / (frames - 1)
-            yield Image.blend(old, black, min(1.0, phase * 2.0))
+            yield Image.blend(old, black, ease_in_cubic(min(1.0, phase * 2.0)))
         yield new.copy()
         return
 
@@ -117,7 +212,7 @@ def transition_frames(
         direction = aliases.get(kind, kind)
         width, height = size
         for index in range(1, frames + 1):
-            progress = index / frames
+            progress = ease_out_cubic(index / frames)
             canvas = Image.new("RGB", size)
             if direction is Transition.SLIDE_LEFT:
                 offset = round(width * progress)
@@ -177,6 +272,18 @@ def transition_frames(
 
     if kind is Transition.MORPH:
         yield from _morph_frames(old, new, frames)
+        return
+
+    if kind in WIPES:
+        yield from _wipe_frames(old, new, frames, *WIPES[kind])
+        return
+
+    if kind is Transition.GLITCH:
+        yield from _glitch_frames(old, new, frames, seed)
+        return
+
+    if kind is Transition.NEON:
+        yield from _neon_frames(old, new, frames)
         return
 
     if kind is Transition.FLASH:

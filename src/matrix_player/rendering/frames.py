@@ -143,6 +143,11 @@ class TextFrameSource(FrameSource):
         return self.renderer.cycle_seconds
 
     @property
+    def lead_seconds(self) -> float:
+        """Time a reveal plays before the message's own time starts."""
+        return self.renderer.lead_seconds
+
+    @property
     def min_seconds(self) -> float:
         """Scrolling text needs one full pass to be readable."""
         return self.renderer.cycle_seconds if self.style.effect in SCROLL_EFFECTS else 0.0

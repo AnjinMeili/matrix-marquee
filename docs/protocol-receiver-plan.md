@@ -7,6 +7,14 @@ real-time messaging channel that also carries other notifications. Nothing
 is built. The sign is a receiver only; sending to other panels was dropped,
 see [wled-output-plan.md](wled-output-plan.md).
 
+**Update 2026-10-19 (decided by the owner):** saved sender profiles become
+the normal path. A known sender shows without a new request only if its
+profile grants it that right, and only while receiving is on; any other
+sender, known or not, still raises a display request. Streams show through
+a layer mixer with blend modes and chromakey. This refines "no automatic
+takeover" below: the takeover is a right a PIN holder granted earlier. See
+[live-mixer-plan.md](live-mixer-plan.md).
+
 ## The request
 
 Use MatrixPrism's Pi app, `receiver/matrix-dmx`, as a git submodule to give
@@ -334,6 +342,10 @@ simpler.
   protected, and with defaults as in "Declared windows" above.
 - **The receiver gets its own repository, matrix-jack,** shared by Protest
   and MatrixPrism as one of three applications for matrix displays.
+- **Granted senders (2026-10-19):** a sender whose saved profile grants
+  "Show without asking" shows without a new request while receiving is on;
+  every other sender still needs an approved request. See
+  [live-mixer-plan.md](live-mixer-plan.md).
 
 ## Phases
 

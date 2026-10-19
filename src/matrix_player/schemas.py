@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .models import FitMode, ItemType, MediaType, PlaybackStatus, PlayBy, PlayMode, TransitionType
 from .rendering.fibonacci import DEFAULT_BLUR, blur_names
-from .rendering.text import FONT_ALIASES, FONTS
+from .rendering.mixer import BLENDS, KEY_LAYERS, KEY_MODES, PLACEMENTS
+from .rendering.reveals import REVEALS
+from .rendering.text import EFFECTS, FONT_ALIASES, FONTS
 
 
 class ApiModel(BaseModel):
@@ -113,10 +115,12 @@ class TextStyleFields(ApiModel):
         default="none", pattern="^(none|solid|dashed|double|marquee|rainbow)$"
     )
     border_color: str = Field(default="#ffffff", pattern=HEX_COLOR)
-    effect: str = Field(default="none", pattern="^(none|scroll|scroll_right|pulse|shake|flash|pow|zoom)$")
+    effect: str = Field(default="none", pattern="^({})$".format("|".join(EFFECTS)))
     accent_color: str = Field(default="#ffd400", pattern=HEX_COLOR)
     background_color: str = Field(default="#000000", pattern=HEX_COLOR)
     motion_speed: str = Field(default="normal", pattern="^(slow|normal|fast)$")
+    reveal: str = Field(default="none", pattern="^({})$".format("|".join(REVEALS)))
+    backing: bool = False
     background_media_id: Optional[int] = Field(default=None, ge=1)
 
 
@@ -142,6 +146,31 @@ class TextPanel(TextPanelBase):
     updated_at: datetime
 
 
+def _choice(values) -> str:
+    return "^({})$".format("|".join(values))
+
+
+class ItemOverlay(ApiModel):
+    """A message shown over a picture, GIF, or video, and how the two mix."""
+
+    text_panel_id: int = Field(ge=1)
+    placement: str = Field(default="full", pattern=_choice(PLACEMENTS))
+    blend: str = Field(default="normal", pattern=_choice(BLENDS))
+    opacity: int = Field(default=100, ge=0, le=100)
+    key_mode: str = Field(default="none", pattern=_choice(KEY_MODES))
+    key_layer: str = Field(default="b", pattern=_choice(KEY_LAYERS))
+    key_color: str = Field(default="#00ff00", pattern=HEX_COLOR)
+    key_tolerance: int = Field(default=30, ge=0, le=100)
+    key_softness: int = Field(default=10, ge=0, le=100)
+    dim: int = Field(default=0, ge=0, le=90)
+    blur: bool = False
+    halo: bool = False
+    auto_color: bool = False
+
+
+OVERLAY_FIELDS = tuple(ItemOverlay.model_fields)
+
+
 class PlaylistItemBase(ApiModel):
     position: Optional[int] = Field(default=None, ge=0)
     item_type: ItemType
@@ -154,6 +183,7 @@ class PlaylistItemBase(ApiModel):
     transition_duration_ms: int = Field(default=500, ge=0, le=60_000)
     fit_mode: FitMode = FitMode.FIT
     fit_blur: str = DEFAULT_BLUR
+    overlay: Optional[ItemOverlay] = None
 
     @field_validator("fit_blur")
     @classmethod
@@ -169,6 +199,8 @@ class PlaylistItemBase(ApiModel):
                 raise ValueError("media items require media_id only")
         elif self.text_panel_id is None or self.media_id is not None:
             raise ValueError("text_panel items require text_panel_id only")
+        if self.overlay is not None and self.item_type != ItemType.MEDIA:
+            raise ValueError("only pictures and videos can have words on top")
         return self
 
 

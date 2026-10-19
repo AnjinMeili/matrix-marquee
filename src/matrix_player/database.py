@@ -105,6 +105,25 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+-- A message shown over a playlist item's picture or video, and how they mix.
+-- A table of its own, so the item table stays as older releases know it.
+CREATE TABLE IF NOT EXISTS item_overlays (
+    item_id INTEGER PRIMARY KEY REFERENCES playlist_items(id) ON DELETE CASCADE,
+    text_panel_id INTEGER NOT NULL REFERENCES text_panels(id) ON DELETE RESTRICT,
+    placement TEXT NOT NULL DEFAULT 'full',
+    blend TEXT NOT NULL DEFAULT 'normal',
+    opacity INTEGER NOT NULL DEFAULT 100,
+    key_mode TEXT NOT NULL DEFAULT 'none',
+    key_layer TEXT NOT NULL DEFAULT 'b',
+    key_color TEXT NOT NULL DEFAULT '#00ff00',
+    key_tolerance INTEGER NOT NULL DEFAULT 30,
+    key_softness INTEGER NOT NULL DEFAULT 10,
+    dim INTEGER NOT NULL DEFAULT 0,
+    blur INTEGER NOT NULL DEFAULT 0,
+    halo INTEGER NOT NULL DEFAULT 0,
+    auto_color INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_item_overlays_panel ON item_overlays(text_panel_id);
 """
 
 # Additive column migrations, applied in order to databases created by older
@@ -127,6 +146,8 @@ COLUMN_MIGRATIONS = (
         "background_media_id",
         "INTEGER DEFAULT NULL REFERENCES media(id) ON DELETE RESTRICT",
     ),
+    ("text_panels", "reveal", "TEXT NOT NULL DEFAULT 'none'"),
+    ("text_panels", "backing", "INTEGER NOT NULL DEFAULT 0"),
 )
 
 

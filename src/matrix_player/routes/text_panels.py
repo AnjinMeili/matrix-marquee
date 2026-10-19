@@ -23,7 +23,7 @@ FIELDS = (
     "name", "content", "font_family", "font_size", "bold", "italic", "alignment",
     "color_mode", "color_value", "outline", "outline_color", "border_style",
     "border_color", "effect", "accent_color", "background_color", "background_media_id",
-    "motion_speed",
+    "motion_speed", "reveal", "backing",
 )
 
 

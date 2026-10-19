@@ -8,15 +8,24 @@ Wi-Fi; no internet connection is needed.
 
 - **Messages** — big, bold text that sizes itself to fill the sign. Bundled
   display fonts, outline, bold and italic, colour styles (solid, rainbow,
-  plasma, changing colours, fire), motion (scroll either way, pulse, shake,
-  flash, comic POW, punch-in) with a speed setting, animated borders, and text
-  over a background picture. One-tap looks (Protest, Comic POW, Alarm, …).
+  plasma, changing colours, fire), motion (scroll either way or round a
+  globe, pulse, shake, flash, comic POW, punch-in) with a speed setting, and
+  how the words appear (typed out, letters rising or dropping in, rising from a
+  line, neon lighting up), which plays before the motion and adds to the
+  item's time. Animated borders, text over a background picture, and an
+  optional dark box behind the text for busy pictures. One-tap looks
+  (Protest, Comic POW, Alarm, …).
 - **Pictures and videos** — JPEG, PNG, WebP, GIF, MP4, WebM, and iPhone MOV.
   Items can be renamed and tagged; tags filter and search the library. Select
   a batch to tag it or add it to a playlist in one step. Videos and animated
   GIFs play, with controls, in their edit pane.
+- **Words on top** — a message over a picture, GIF, or video in a playlist,
+  over the whole sign or in a top or bottom band, with options to keep it
+  readable (darken or blur the picture behind, a soft halo, pick the clearest
+  colour), blend modes, and making black or one colour see-through.
 - **Playlists** — per-item time or "play the animation N times", entrance
-  effects (comic slam, morph, camera flash, push, fade, zoom, …), and play
+  effects (comic slam, morph, camera flash, soft wipe, glitch, neon flicker,
+  push, fade, zoom, …), and play
   modes (in order, shuffle, random, stop at the end). Playlists pick up where
   they left off after a reboot, a stop, or showing something on its own.
 - **Previews** — every editor previews with the sign's own renderer before

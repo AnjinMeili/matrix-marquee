@@ -28,6 +28,12 @@ class TransitionType(str, Enum):
     FLASH = "flash"
     IMPACT = "impact"
     MORPH = "morph"
+    WIPE_LEFT = "wipe_left"
+    WIPE_RIGHT = "wipe_right"
+    WIPE_UP = "wipe_up"
+    WIPE_DOWN = "wipe_down"
+    GLITCH = "glitch"
+    NEON = "neon"
 
 
 class PlayMode(str, Enum):

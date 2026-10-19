@@ -15,9 +15,9 @@ session.
 2. [PROJECT_PLAN.md](PROJECT_PLAN.md) §12–14: decisions on record, the related applications, what is built
    and what is open.
 3. The `docs/*-plan.md` for a feature before building it. Plans exist for the
-   LLM sign designer, street-sound counting, text reveals and transitions,
-   the Pico sensor agent, and receiving pixel protocols (WLED output was
-   dropped).
+   LLM sign designer, street-sound counting, text reveals and transitions
+   (built), the Pico sensor agent, receiving pixel protocols, and the layer
+   mixer with known senders (WLED output was dropped).
 4. [needs.txt](needs.txt): the owner's own goals, as written. Do not edit it.
 
 ## Which skill to load

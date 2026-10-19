@@ -1,6 +1,10 @@
 # Plan: text reveals and transitions
 
-**Status:** researched and prototyped on 2026-10-17; not built.
+**Status:** researched and prototyped on 2026-10-17; built on 2026-10-19, not
+yet deployed or checked behind the diffuser. Both owner decisions took the
+recommended answer: the reveal replays every time the message comes round, and
+new messages default to `none`. "As built" at the end records where the build
+differs from the design.
 
 ## The request
 
@@ -117,3 +121,46 @@ per-letter staggering for long messages.
 About a day: half for per-letter layout, caching, and the reveals; the rest
 for easing, the three transitions, globe, the editor, and tests. Check the
 reveals outdoors behind the diffuser before choosing defaults.
+
+## As built (2026-10-19)
+
+- **Where it lives:** `rendering/reveals.py` keeps time (each letter's offset
+  and light at any moment); `TextRenderer` draws it. Easing curves are in
+  `rendering/easing.py`, shared with `transitions.py`.
+- **Per-letter layout** is worked out only when a reveal needs it, from each
+  line's position, in one pass using character pairs so kerning is kept.
+  Letters drawn one by one match the whole block to within antialiasing, and
+  the last reveal frame is the block's own still frame, so the hand-over is
+  exact.
+- **Cost** is far below the prototypes: letter masks are drawn once and
+  stamped with numpy. On a Mac a reveal frame takes 0.3 ms at 96×64 and
+  1.8 ms at 384×128; the Pi has not been timed yet.
+- **Timing:** typewriter 70 ms a character plus a 0.3 s cursor beat; letters
+  rise 350 ms each, 45 ms apart; drop-in 500 ms each, 60 ms apart (overshoot
+  2.2); matte rise 0.9 s; neon about 1.15 s. All scale with Motion speed and
+  are capped at 1.5 s.
+- **Item time:** the reveal is added in front of the item's time, in playback
+  and in previews, so reading time is not cut.
+- **Where reveals apply:** still, pulse, shake, and flash take any reveal.
+  Scrolling (including globe) takes only neon, where each letter comes onto
+  the sign as a cold tube and lights 0.35–0.7 s later, adding no time. POW and
+  punch-in are entrances of their own, so the picker is off for them.
+- **Colours and borders** hold still during a reveal and start moving after
+  it, so nothing jumps at the hand-over.
+- **Globe** is the effect `globe`: the flat strip is half the cylinder's
+  circumference (π/2 × the box width), so a pass takes longer than a flat
+  scroll at the same speed: up to about 1.6× for a short message, less for a
+  long one. The middle third, where letters read best, moves at about the
+  flat speed.
+- **Backing plate** is the style flag `backing`: a black plate at 72% opacity
+  with rounded corners, sized to the text plus room for pulse and shake, or a
+  band along a scrolling message.
+- **Transitions:** `wipe_left`, `wipe_right`, `wipe_up`, `wipe_down`,
+  `glitch`, `neon`. The neon change sags once, recovers, dies, holds dark
+  briefly, and snaps to the new item: one flicker, never a strobe. Slides and
+  fades ease out; fade through black eases in on the way out.
+- **Database:** two additive columns on `text_panels`, `reveal` (default
+  `none`) and `backing` (default 0).
+- **Still to do:** time the reveals and globe on the Pi at the largest sign
+  in use, and look at them behind the diffuser in daylight and at night before
+  choosing any defaults.

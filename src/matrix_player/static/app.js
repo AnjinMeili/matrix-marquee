@@ -13,8 +13,15 @@
     ["impact", "Comic slam"], ["morph", "Morph"], ["flash", "Camera flash"], ["fade", "Fade"],
     ["fade_out", "Fade through black"], ["slide_left", "Push left"], ["slide_right", "Push right"],
     ["slide_up", "Push up"], ["slide_down", "Push down"], ["zoom", "Zoom in"],
+    ["wipe_left", "Soft wipe left"], ["wipe_right", "Soft wipe right"], ["wipe_up", "Soft wipe up"],
+    ["wipe_down", "Soft wipe down"], ["glitch", "Glitch"], ["neon", "Neon flicker"],
     ["rotate", "Spin in"], ["pixel_dissolve", "Sparkle"], ["none", "Instant"]
   ];
+  // Scrolling text never stands still, so only reveals that keep letters in place fit it;
+  // the POW burst and punch-in are entrances of their own.
+  const SCROLL_EFFECTS = ["scroll", "scroll_right", "globe"];
+  const SCROLL_REVEALS = ["none", "neon"];
+  const ENTRANCE_EFFECTS = ["pow", "zoom"];
   const TRANSITION_LABEL = Object.fromEntries(TRANSITIONS);
   const FIT_LABEL = { crop: "fills sign", fit: "whole picture", letterbox: "whole picture", stretch: "stretched", fibonacci: "edges stretched", mirror: "mirrored" };
   const MODE_LABEL = { loop: "In order", shuffle: "Shuffle", random: "Random", once: "Stops at the end" };
@@ -24,7 +31,8 @@
     font_family: "impact", font_size: 0, bold: false, italic: false, alignment: "center",
     color_mode: "solid", color_value: "#ffdd00", outline: true, outline_color: "#000000",
     border_style: "none", border_color: "#ffffff", effect: "none", accent_color: "#ffd400",
-    background_color: "#000000", background_media_id: null, motion_speed: "normal"
+    background_color: "#000000", background_media_id: null, motion_speed: "normal",
+    reveal: "none", backing: false
   };
   const PRESETS = [
     ["protest", "Protest", { font_family: "impact", color_mode: "solid", color_value: "#ffdd00", outline: true, outline_color: "#000000", effect: "none", border_style: "none", background_color: "#000000" }],
@@ -328,8 +336,16 @@
     form.elements.color_value.disabled = !["solid", "cycle"].includes(form.elements.color_mode.value);
     form.elements.outline_color.disabled = !form.elements.outline.checked;
     form.elements.border_color.disabled = ["none", "rainbow"].includes(form.elements.border_style.value);
-    const moving = form.elements.effect.value !== "none" || form.elements.color_mode.value !== "solid"
-      || ["marquee", "rainbow"].includes(form.elements.border_style.value);
+    const effect = form.elements.effect.value;
+    const reveal = form.elements.reveal;
+    for (const option of reveal.options) {
+      option.disabled = option.value !== "none" && (ENTRANCE_EFFECTS.includes(effect)
+        || (SCROLL_EFFECTS.includes(effect) && !SCROLL_REVEALS.includes(option.value)));
+    }
+    if (reveal.selectedOptions[0]?.disabled) reveal.value = "none";
+    reveal.disabled = ENTRANCE_EFFECTS.includes(effect);
+    const moving = effect !== "none" || form.elements.color_mode.value !== "solid"
+      || ["marquee", "rainbow"].includes(form.elements.border_style.value) || reveal.value !== "none";
     form.elements.motion_speed.disabled = !moving;
   }
 
@@ -352,7 +368,9 @@
       effect: fields.effect.value,
       background_color: fields.background_color.value,
       background_media_id: fields.background_media_id.value ? Number(fields.background_media_id.value) : null,
-      motion_speed: fields.motion_speed.value
+      motion_speed: fields.motion_speed.value,
+      reveal: fields.reveal.value,
+      backing: fields.backing.checked
     };
   }
 
@@ -464,6 +482,10 @@
       : seconds(item.duration_ms);
     const parts = [target.typeLabel, timing, TRANSITION_LABEL[item.transition_type] || item.transition_type];
     if (target.kind === "media" && target.media?.media_type !== undefined) parts.push(FIT_LABEL[item.fit_mode] || item.fit_mode);
+    if (item.overlay) {
+      const panel = state.panels.find((entry) => entry.id === item.overlay.text_panel_id);
+      parts.push(`words: “${panel?.name || "message"}”`);
+    }
     return parts.join(" · ");
   }
 
@@ -653,10 +675,66 @@
       form.elements.fit_mode.value = item.fit_mode === "letterbox" ? "fit" : item.fit_mode;
       form.elements.fit_blur.value = item.fit_blur || "average";
     }
+    fillOverlay(form, item?.overlay);
     syncItemFields();
     $("#item-preview").removeAttribute("src");
     $("#item-dialog").showModal();
     renderItemPreview();
+  }
+
+  // Words on top: a message shown over a picture or video.
+  const OVERLAY_DEFAULTS = {
+    text_panel_id: null, placement: "full", blend: "normal", opacity: 100, key_mode: "none", key_layer: "b",
+    key_color: "#00ff00", key_tolerance: 30, key_softness: 10, dim: 40, blur: false, halo: false, auto_color: false
+  };
+
+  function fillOverlay(form, overlay) {
+    const values = { ...OVERLAY_DEFAULTS, ...(overlay || {}) };
+    const fields = form.elements;
+    fillSelect($("#overlay-panel"), [["", "None"], ...state.panels.map((panel) => [panel.id, panel.name])], values.text_panel_id ?? "");
+    fields.overlay_placement.value = values.placement;
+    ensureOption(fields.overlay_dim, values.dim, `${values.dim}%`);
+    fields.overlay_blur.checked = values.blur;
+    fields.overlay_halo.checked = values.halo;
+    fields.overlay_auto.checked = values.auto_color;
+    fields.overlay_blend.value = values.blend;
+    ensureOption(fields.overlay_opacity, values.opacity, `${values.opacity}%`);
+    fields.overlay_key.value = values.key_mode;
+    fields.overlay_key_layer.value = values.key_layer;
+    fields.overlay_key_color.value = values.key_color;
+    ensureOption(fields.overlay_tolerance, values.key_tolerance, `${values.key_tolerance}%`);
+    form.dataset.keySoftness = String(values.key_softness);
+    $(".overlay-more").open = values.blend !== "normal" || values.opacity !== 100 || values.key_mode !== "none";
+  }
+
+  function overlayBody(form) {
+    const fields = form.elements;
+    if (!fields.overlay_panel.value) return null;
+    return {
+      text_panel_id: Number(fields.overlay_panel.value),
+      placement: fields.overlay_placement.value,
+      blend: fields.overlay_blend.value,
+      opacity: Number(fields.overlay_opacity.value),
+      key_mode: fields.overlay_key.value,
+      key_layer: fields.overlay_key_layer.value,
+      key_color: fields.overlay_key_color.value,
+      key_tolerance: Number(fields.overlay_tolerance.value),
+      key_softness: Number(form.dataset.keySoftness || OVERLAY_DEFAULTS.key_softness),
+      dim: Number(fields.overlay_dim.value),
+      blur: fields.overlay_blur.checked,
+      halo: fields.overlay_halo.checked,
+      auto_color: fields.overlay_auto.checked
+    };
+  }
+
+  function syncOverlayFields(form, type) {
+    const fields = form.elements;
+    $("#item-overlay").hidden = type !== "media";
+    $("#overlay-details").hidden = !fields.overlay_panel.value;
+    const key = fields.overlay_key.value;
+    $("#overlay-key-layer-row").hidden = key === "none";
+    $("#overlay-tolerance-row").hidden = key === "none";
+    $("#overlay-key-color-row").hidden = key !== "color";
   }
 
   function populateItemContent(selected) {
@@ -719,6 +797,7 @@
     if (!animated) form.elements.play_by.value = "time";
     $("#item-fit-row").hidden = type !== "media";
     $("#item-blur-row").hidden = type !== "media" || form.elements.fit_mode.value !== "fibonacci";
+    syncOverlayFields(form, type);
     updateItemInfo();
   }
 
@@ -737,7 +816,8 @@
       transition_type: fields.transition.value,
       transition_duration_ms: Number(fields.transition_duration.value),
       fit_mode: fields.fit_mode.value,
-      fit_blur: fields.fit_blur.value
+      fit_blur: fields.fit_blur.value,
+      overlay: type === "media" ? overlayBody(form) : null
     };
     return { playlistId, id, body };
   }
@@ -1462,7 +1542,8 @@
       schedulePreview();
     }
     if (event.target.id === "item-type") { populateItemContent(); syncItemFields(); }
-    if (event.target.id === "item-content" || event.target.name === "fit_mode") syncItemFields();
+    if (event.target.id === "item-content" || event.target.name === "fit_mode"
+      || event.target.id === "overlay-panel" || event.target.name === "overlay_key") syncItemFields();
     if (event.target.name === "play_by") updateItemInfo();
     if (event.target.closest("#item-form")) scheduleItemPreview();
     if (event.target.id === "media-filter") renderMedia();
