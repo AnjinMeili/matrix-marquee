@@ -28,11 +28,15 @@ def make_settings(tmp_path: Path) -> Settings:
 def test_health_and_captive_routes(tmp_path: Path) -> None:
     with TestClient(create_app(make_settings(tmp_path))) as client:
         assert client.get("/health").status_code == 200
+        network = client.get("/api/network").json()
+        assert set(network) == {"access_point", "upstream"}
+        assert set(network["access_point"]) == {"active"}
+        assert set(network["upstream"]) == {"available"}
         assert client.get("/generate_204", follow_redirects=False).status_code == 302
         apple = client.get("/hotspot-detect.html", follow_redirects=False)
         assert apple.status_code == 200
         assert "Success" not in apple.text
-        assert "Open PROTEST Matrix Player" in apple.text
+        assert "Open MatrixMarquee" in apple.text
         assert client.get("/connecttest.txt", follow_redirects=False).status_code == 302
         assert client.get("/ncsi.txt", follow_redirects=False).status_code == 302
         fallback = client.get("/some/captive/path", follow_redirects=False)
@@ -44,7 +48,7 @@ def test_health_and_captive_routes(tmp_path: Path) -> None:
         assert client.get("/static/does-not-exist.js").status_code == 404
         root = client.get("/")
         assert root.status_code == 200
-        assert "Matrix Player" in root.text
+        assert "MatrixMarquee" in root.text
         assert 'href="/static/app.css"' in root.text
         assert 'src="/static/app.js"' in root.text
         for dialog_id in (

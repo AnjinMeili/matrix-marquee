@@ -35,7 +35,7 @@
     reveal: "none", backing: false
   };
   const PRESETS = [
-    ["protest", "Protest", { font_family: "impact", color_mode: "solid", color_value: "#ffdd00", outline: true, outline_color: "#000000", effect: "none", border_style: "none", background_color: "#000000" }],
+    ["impact", "Impact", { font_family: "impact", color_mode: "solid", color_value: "#ffdd00", outline: true, outline_color: "#000000", effect: "none", border_style: "none", background_color: "#000000" }],
     ["pow", "Comic POW", { font_family: "comic", color_mode: "solid", color_value: "#ff2020", outline: true, outline_color: "#000000", effect: "pow", accent_color: "#ffd400", border_style: "none", background_color: "#000000" }],
     ["rainbow", "Rainbow", { font_family: "block", color_mode: "rainbow", outline: true, outline_color: "#000000", effect: "pulse", border_style: "rainbow", background_color: "#000000" }],
     ["alarm", "Alarm", { font_family: "impact", color_mode: "solid", color_value: "#ffffff", outline: true, outline_color: "#000000", effect: "flash", border_style: "marquee", border_color: "#ffdd00", background_color: "#c00000" }],
@@ -63,8 +63,19 @@
     node.replaceChildren(...children.flat().filter((child) => child != null));
   }
 
+  // The live events channel: who is connected, and what changed (see connectEvents).
+  const live = { socket: null, session: null, label: null, retry: 1000, reconnecting: false, catchUp: null };
+
+  // Changes carry this page's session, so other phones can say who made them
+  // and this page can skip its own changes.
+  function withSession(headers = {}) {
+    const merged = new Headers(headers);
+    if (live.session) merged.set("X-Session", live.session);
+    return merged;
+  }
+
   async function request(path, options = {}) {
-    const response = await fetch(path, options);
+    const response = await fetch(path, { ...options, headers: withSession(options.headers) });
     if (!response.ok) {
       let detail = response.statusText;
       try {
@@ -1148,6 +1159,7 @@
       const status = $(".upload-status", row);
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/media");
+      if (live.session) xhr.setRequestHeader("X-Session", live.session);
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) bar.value = event.loaded / event.total;
         if (event.loaded === event.total) status.textContent = "Checking…";
@@ -1191,10 +1203,8 @@
     const metrics = (node, rows) => node.replaceChildren(...rows.map(([term, value]) => el("div", {}, el("dt", { text: term }), el("dd", { text: value }))));
     $("#settings-network-dot").className = `status-dot ${network.access_point.active ? "online" : "error"}`;
     metrics($("#network-details"), [
-      ["Hostname", network.hostname || "—"],
-      ["Local address", network.local_address || "—"],
-      ["Wi-Fi access point", network.access_point.active ? `${network.access_point.ssid} on` : "Off"],
-      ["Internet", network.upstream.available ? `${network.upstream.interface || "connected"}` : "Offline"]
+      ["Wi-Fi access point", network.access_point.active ? "On" : "Off"],
+      ["Internet", network.upstream.available ? "Connected" : "Offline"]
     ]);
     metrics($("#matrix-details"), [
       ["Resolution", `${status.matrix.width} × ${status.matrix.height}`],
@@ -1231,6 +1241,64 @@
     });
   }
 
+  // ---------- Operator PIN ----------
+
+  function renderOperator(operator) {
+    state.operator = operator;
+    const locked = operator.pin_set && !operator.trusted_until;
+    document.querySelectorAll("[data-guarded]").forEach((node) => {
+      if (node.tagName === "A") {
+        node.classList.toggle("locked", locked);
+        node.setAttribute("aria-disabled", String(locked));
+        node.tabIndex = locked ? -1 : 0;
+      } else {
+        node.disabled = locked;
+      }
+    });
+    document.querySelectorAll(".guard-hint").forEach((node) => { node.hidden = !locked; });
+    $("#operator-login-form").hidden = !locked;
+    $("#operator-trusted").hidden = !operator.trusted_until;
+    const pill = $("#operator-pill");
+    let message;
+    if (!operator.pin_set) {
+      message = "No operator PIN is set yet, so anyone on the sign's Wi-Fi can change these settings. Whoever looks after the sign can set one.";
+      pill.textContent = "Open";
+    } else if (operator.trusted_until) {
+      const until = new Date(operator.trusted_until * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      message = `This phone can change settings until ${until}.`;
+      pill.textContent = "Unlocked";
+    } else {
+      message = "Settings are locked. Enter the operator PIN to change them on this phone for 12 hours.";
+      pill.textContent = "Locked";
+    }
+    $("#operator-message").textContent = operator.problem ? `${message} ${operator.problem}` : message;
+  }
+
+  async function refreshOperator() {
+    try { renderOperator(await request("/api/operator")); } catch (_) {}
+  }
+
+  $("#operator-login-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const field = event.target.elements.pin;
+    try {
+      renderOperator(await send("/api/operator/login", { pin: field.value }));
+      notice("Settings unlocked on this phone for 12 hours.");
+    } catch (error) { fail(error); }
+    field.value = "";
+  });
+
+  $("#operator-pin-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const fields = event.target.elements;
+    if (fields.new_pin.value !== fields.new_pin_again.value) { notice("The two new PINs are different.", "error"); return; }
+    try {
+      renderOperator(await send("/api/operator/pin", { current_pin: fields.current_pin.value, new_pin: fields.new_pin.value }));
+      notice("PIN changed. Other phones will need the new one.");
+      event.target.reset();
+    } catch (error) { fail(error); }
+  });
+
   let displayTimer = null;
   function changeDisplay(input) {
     const next = { ...(state.display || { brightness: 100, gamma: 1 }), [input.name]: Number(input.value) };
@@ -1240,7 +1308,7 @@
       try {
         renderDisplay(await send("/api/display", next, "PUT"));
         $("#display-status").textContent = `Saved: brightness ${next.brightness}%, gamma ${next.gamma.toFixed(1)}.`;
-      } catch (error) { fail(error); }
+      } catch (error) { fail(error); refreshOperator(); }
     }, 200);
   }
 
@@ -1423,11 +1491,12 @@
     // Fonts load on their own so one failing list can never leave the editor fontless.
     await loadFonts();
     try {
-      const [status, network, playlists, media, panels, diagnostics, tags, health, display] = await Promise.all([
+      const [status, network, playlists, media, panels, diagnostics, tags, health, display, operator] = await Promise.all([
         request("/api/status"), request("/api/network"), request("/api/playlists"),
         request("/api/media"), request("/api/text-panels"), request("/api/diagnostics"),
-        request("/api/media/tags"), request("/api/health"), request("/api/display")
+        request("/api/media/tags"), request("/api/health"), request("/api/display"), request("/api/operator")
       ]);
+      renderOperator(operator);
       renderDisplay(display);
       Object.assign(state, { playlists, media, panels, tags });
       if (state.tagFilter && !tags.some((tag) => tag.name === state.tagFilter)) state.tagFilter = null;
@@ -1482,7 +1551,7 @@
     "quick-form": async (form) => {
       const content = form.elements.content.value.trim();
       if (!content) throw new Error("Type a message first");
-      const key = $("#quick-presets .preset.active")?.dataset.preset || "protest";
+      const key = $("#quick-presets .preset.active")?.dataset.preset || "impact";
       const style = PRESETS.find(([presetKey]) => presetKey === key)[2];
       const panel = await send("/api/text-panels", {
         ...DEFAULT_STYLE, ...style, content, name: `Quick: ${content.replace(/\s+/g, " ").slice(0, 50)}`
@@ -1579,6 +1648,12 @@
         refreshStatus();
       } catch (error) { fail(error); }
     },
+    "operator-logout": async () => {
+      try {
+        renderOperator(await request("/api/operator/logout", { method: "POST" }));
+        notice("This phone is no longer trusted to change settings.");
+      } catch (error) { fail(error); }
+    },
     "reset-display": async () => {
       try {
         renderDisplay(await send("/api/display", { brightness: 100, gamma: 1 }, "PUT"));
@@ -1631,6 +1706,100 @@
     }
   });
 
+  // ---------- Live events ----------
+
+  const AREA_LABEL = {
+    playlists: "a playlist", messages: "a message", library: "the pictures and videos",
+    sign: "what's on the sign", display: "the brightness"
+  };
+
+  function savedName() {
+    try { return localStorage.getItem("signPhoneName") || ""; } catch (_) { return ""; }
+  }
+
+  function connectEvents() {
+    let socket;
+    try { socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/events`); }
+    catch (_) { return; }
+    live.socket = socket;
+    socket.addEventListener("open", () => {
+      live.retry = 1000;
+      socket.send(JSON.stringify({ type: "hello", label: savedName() }));
+      // Anything missed while away is picked up by reloading once.
+      if (live.reconnecting) load();
+      live.reconnecting = false;
+    });
+    socket.addEventListener("message", (message) => {
+      let event;
+      try { event = JSON.parse(message.data); } catch (_) { return; }
+      handleEvent(event);
+    });
+    socket.addEventListener("close", () => {
+      if (live.socket !== socket) return;
+      Object.assign(live, { socket: null, session: null, reconnecting: true });
+      renderPresence(null);
+      setTimeout(connectEvents, live.retry);
+      live.retry = Math.min(live.retry * 2, 30000);
+    });
+  }
+
+  function handleEvent(event) {
+    if (event.type === "welcome") {
+      live.session = event.session;
+      live.label = event.label;
+    } else if (event.type === "presence") {
+      renderPresence(event);
+    } else if (event.type === "health") {
+      notice(event.text, event.problem ? "error" : "ok");
+      request("/api/health").then(renderHealth).catch(() => {});
+    } else if (event.type === "playback_warning") {
+      notice(event.text, "error");
+      refreshStatus();
+    } else if (event.type === "activity" && event.by !== live.session) {
+      const who = live.people?.find((person) => person.id === event.by)?.label;
+      notice(`${who ? who.charAt(0).toUpperCase() + who.slice(1) : "Another phone"} changed ${AREA_LABEL[event.area] || "the sign"}.`);
+      scheduleCatchUp();
+    }
+  }
+
+  // Reload after someone else's change, but never under an open dialog.
+  function scheduleCatchUp() {
+    clearTimeout(live.catchUp);
+    live.catchUp = setTimeout(() => {
+      if (document.querySelector("dialog[open]")) scheduleCatchUp();
+      else load();
+    }, 800);
+  }
+
+  function renderPresence(event) {
+    const line = $("#presence-line");
+    const detail = $("#phone-presence");
+    if (!event) {
+      live.people = [];
+      line.hidden = true;
+      detail.textContent = "Live updates paused. Reconnecting…";
+      return;
+    }
+    live.people = event.people;
+    const me = event.people.find((person) => person.id === live.session);
+    if (me) live.label = me.label;
+    const others = event.people.filter((person) => person.id !== live.session).map((person) => person.label);
+    line.hidden = others.length === 0;
+    line.textContent = others.length === 1 ? `Also connected: ${others[0]}.` : `Also connected: ${others.length} others (${others.join(", ")}).`;
+    detail.textContent = others.length ? `You appear as “${live.label}”. ${line.textContent}` : `You appear as “${live.label}”. Nobody else is connected.`;
+    const input = $("#phone-name-form").elements.label;
+    if (document.activeElement !== input) input.value = savedName();
+    input.placeholder = live.label || "an iPhone";
+  }
+
+  $("#phone-name-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = event.target.elements.label.value.trim().slice(0, 30);
+    try { if (name) localStorage.setItem("signPhoneName", name); else localStorage.removeItem("signPhoneName"); } catch (_) {}
+    if (live.socket?.readyState === WebSocket.OPEN && name) live.socket.send(JSON.stringify({ type: "hello", label: name }));
+    notice(name ? `Saved. Others now see “${name}”.` : "Name cleared; it applies next time the page opens.");
+  });
+
   window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
   let resizeTimer = null;
   window.addEventListener("resize", () => {
@@ -1641,7 +1810,8 @@
   setInterval(() => { if (document.visibilityState === "visible") refreshStatus(); }, 3000);
 
   $("#media-dialog").addEventListener("close", stopMediaPlayer);
-  presetButtons($("#quick-presets"), () => {}, "protest");
+  presetButtons($("#quick-presets"), () => {}, "impact");
   showView(location.hash.slice(1) || "dashboard");
   load();
+  connectEvents();
 })();

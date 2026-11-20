@@ -22,11 +22,11 @@ from . import __version__
 from .config import Settings
 from .storage import PROXY_SUFFIX
 
-ARCHIVE_ROOT = "protest-backup"
+ARCHIVE_ROOT = "matrix-marquee-backup"
 HEADROOM_BYTES = 100 * 1024 * 1024
 
-README = """Protest sign backup
-===================
+README = """MatrixMarquee backup
+=====================
 
   manifest.json             what is in this backup and when it was made
   database/{database}       messages, playlists, tags, and play positions
@@ -104,7 +104,7 @@ def create_backup(settings: Settings, matrix_size: Tuple[int, int]) -> Backup:
         if shutil.disk_usage(settings.data_dir).free < needed:
             raise BackupSpaceError("not enough free storage on the sign to build the backup")
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        filename = f"protest-backup-{stamp}.zip"
+        filename = f"matrix-marquee-backup-{stamp}.zip"
         work = Path(tempfile.mkdtemp(prefix=".backup-", dir=settings.data_dir))
         archive = settings.data_dir / f".{filename}"
         try:
@@ -149,7 +149,8 @@ def create_backup(settings: Settings, matrix_size: Tuple[int, int]) -> Backup:
 
 def remove_stale_archives(settings: Settings) -> None:
     """Clears archives left behind if the service stopped mid-download."""
-    for path in settings.data_dir.glob(".protest-backup-*.zip"):
-        path.unlink(missing_ok=True)
+    for pattern in (".matrix-marquee-backup-*.zip", ".protest-backup-*.zip"):
+        for path in settings.data_dir.glob(pattern):
+            path.unlink(missing_ok=True)
     for path in settings.data_dir.glob(".backup-*"):
         shutil.rmtree(path, ignore_errors=True)

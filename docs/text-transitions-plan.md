@@ -14,7 +14,7 @@ reveal), illumination (neon flicker and glow, glitch, a feathered wipe),
 spatial distortion (a globe or fish-eye wrap, a typewriter reveal), and three
 practices: asymmetric easing, motion blur, and high-contrast masking.
 
-Protest shows **words to inform**; MatrixPrism is the place for generative,
+MatrixMarquee shows **words to inform**; MatrixPrism is the place for generative,
 music-driven art. So every effect here is judged by one test: can a passer-by
 read the message sooner, or remember it better? Effects that only decorate
 are lower priority.

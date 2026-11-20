@@ -121,6 +121,8 @@ class HealthMonitor:
         self._minute: Optional[_Minute] = None
         self._problems = _Problems()
         self._last_prune = 0.0
+        # Called with (event type, fields) when a problem starts or clears; the app points it at open pages.
+        self.notify: Callable[..., None] = lambda *event, **fields: None
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._run, name="health-monitor", daemon=True)
@@ -200,6 +202,7 @@ class HealthMonitor:
             )
         log = logger.warning if problem else logger.info
         log("health_event", extra={"kind": kind, "detail": detail})
+        self.notify("health", kind=kind, text=detail, problem=problem)
 
     def _track_events(self, reading: Reading, now: float) -> None:
         state = self._problems

@@ -19,7 +19,7 @@ from ..backup import BackupBusyError, BackupSpaceError, create_backup, estimate_
 from ..config import Settings
 from ..database import Database
 from ..playback import PlaybackController
-from .dependencies import get_database, get_playback, get_settings
+from .dependencies import get_database, get_playback, get_settings, require_operator
 
 
 router = APIRouter(prefix="/api", tags=["system"])
@@ -79,16 +79,8 @@ def status_endpoint(
 @router.get("/network")
 def network_endpoint() -> dict:
     return {
-        "hostname": socket.gethostname(),
-        "local_address": _local_address(),
-        "access_point": {
-            "ssid": os.getenv("MATRIX_PLAYER_AP_SSID"),
-            "active": os.getenv("MATRIX_PLAYER_AP_ACTIVE", "").lower() in {"1", "true", "yes"},
-        },
-        "upstream": {
-            "available": _local_address() is not None,
-            "interface": os.getenv("MATRIX_PLAYER_UPSTREAM_INTERFACE"),
-        },
+        "access_point": {"active": os.getenv("MATRIX_PLAYER_AP_ACTIVE", "").lower() in {"1", "true", "yes"}},
+        "upstream": {"available": _local_address() is not None},
     }
 
 
@@ -125,7 +117,7 @@ REDACTIONS = (
 )
 
 
-@router.get("/diagnostics/logs")
+@router.get("/diagnostics/logs", dependencies=[Depends(require_operator)])
 def diagnostics_logs() -> PlainTextResponse:
     """Recent service logs with credentials and content redacted.
 
@@ -148,13 +140,13 @@ def diagnostics_logs() -> PlainTextResponse:
     return PlainTextResponse(
         text,
         headers={
-            "Content-Disposition": f'attachment; filename="protest-logs-{stamp}.txt"',
+            "Content-Disposition": f'attachment; filename="matrix-marquee-logs-{stamp}.txt"',
             "Cache-Control": "no-store",
         },
     )
 
 
-@router.get("/backup")
+@router.get("/backup", dependencies=[Depends(require_operator)])
 async def download_backup(
     request: Request, settings: Settings = Depends(get_settings)
 ) -> FileResponse:

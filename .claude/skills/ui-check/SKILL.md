@@ -58,7 +58,7 @@ ignore:
   enforces this.
 - Use `fill(node, ...)` rather than `replaceChildren(...)` whenever a child
   can be `null`.
-- Write copy for non-technical protesters ("Show now", "Turn off sign"), not
+- Write copy for non-technical operators ("Show now", "Turn off sign"), not
   developers.
 - Downloads don't work in the portal window; tell users to open Safari.
 - Previews should match the panel: draw with the sign's own renderer

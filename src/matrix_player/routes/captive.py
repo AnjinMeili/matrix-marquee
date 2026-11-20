@@ -17,9 +17,9 @@ def apple_probe(request: Request) -> HTMLResponse:
     portal = _portal(request)
     return HTMLResponse(
         "<!doctype html><html><head><meta name='viewport' "
-        "content='width=device-width,initial-scale=1'><title>PROTEST</title>"
+        "content='width=device-width,initial-scale=1'><title>MatrixMarquee</title>"
         f"<meta http-equiv='refresh' content='0;url={portal}'></head>"
-        f"<body><a href='{portal}'>Open PROTEST Matrix Player</a></body></html>"
+        f"<body><a href='{portal}'>Open MatrixMarquee</a></body></html>"
     )
 
 
@@ -43,4 +43,3 @@ def windows_ncsi(request: Request) -> RedirectResponse:
 @router.get("/success.txt")
 def generic_probe(request: Request) -> RedirectResponse:
     return RedirectResponse(_portal(request), status_code=302)
-

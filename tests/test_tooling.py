@@ -34,6 +34,23 @@ def test_every_setting_the_code_reads_is_documented() -> None:
     assert read - documented == set(), "add these to .env.example"
 
 
+def test_ap_domain_suffix_is_validated_and_rendered() -> None:
+    setup = (ROOT / "scripts" / "setup-ap.sh").read_text()
+    template = (ROOT / "deploy" / "ap" / "dnsmasq.conf.template").read_text()
+
+    assert "AP_DOMAIN_SUFFIX=${AP_DOMAIN_SUFFIX:-local}" in setup
+    assert "local|home.arpa)" in setup
+    assert "AP_DOMAIN_SUFFIX must be 'local' or 'home.arpa'" in setup
+    for suffix in ("local", "home.arpa"):
+        rendered = (
+            template.replace("@AP_HOSTNAME@", "matrix-marquee")
+            .replace("@AP_DOMAIN_SUFFIX@", suffix)
+            .replace("@AP_ADDRESS@", "10.42.0.1")
+        )
+        assert f"domain=matrix-marquee.{suffix}" in rendered
+        assert f"address=/matrix-marquee.{suffix}/10.42.0.1" in rendered
+
+
 def _ui_check_available() -> bool:
     if importlib.util.find_spec("websocket") is None:
         return False

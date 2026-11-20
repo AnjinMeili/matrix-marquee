@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build the rpi-rgb-led-matrix Python bindings into a cached wheel.
 #
-# Run this on the Pi (as root) once per OS/Python/Pillow change. Each protest
+# Run this on the Pi (as root) once per OS/Python/Pillow change. Each MatrixMarquee
 # release creates a fresh virtualenv, so install.sh reinstalls the wheel from
 # /opt/protest/wheels rather than rebuilding the C++ library every deploy.
 set -eu

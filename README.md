@@ -1,8 +1,9 @@
-# Protest RGB Matrix Appliance
+# MatrixMarquee
 
-DietPi appliance software for a Raspberry Pi 4 driving an RGB LED matrix of
-any size as a protest sign (the first build is 96x64). Everything is controlled from a phone over the sign's own
-Wi-Fi; no internet connection is needed.
+Offline-first signage and information-display software for a Raspberry Pi
+driving an RGB LED matrix of any size. The first display is 96x64. Everything
+is controlled from a phone over the display's own Wi-Fi; no internet
+connection is needed.
 
 ## What it does
 
@@ -14,7 +15,7 @@ Wi-Fi; no internet connection is needed.
   line, neon lighting up), which plays before the motion and adds to the
   item's time. Animated borders, text over a background picture, and an
   optional dark box behind the text for busy pictures. One-tap looks
-  (Protest, Comic POW, Alarm, …).
+  (Impact, Comic POW, Alarm, …).
 - **Pictures and videos** — JPEG, PNG, WebP, GIF, MP4, WebM, and iPhone MOV.
   Items can be renamed and tagged; tags filter and search the library. Select
   a batch to tag it or add it to a playlist in one step. Videos and animated
@@ -28,6 +29,9 @@ Wi-Fi; no internet connection is needed.
   push, fade, zoom, …), and play
   modes (in order, shuffle, random, stop at the end). Playlists pick up where
   they left off after a reboot, a stop, or showing something on its own.
+- **Live updates** — every open page sees who else is connected (each phone
+  can set its name), hears about changes made from another phone and picks
+  them up, and is told at once about heat or power problems and skipped items.
 - **Previews** — every editor previews with the sign's own renderer before
   saving, and the Sign page mirrors the panel live.
 - **Brightness and gamma** — live controls, kept across restarts, and a
@@ -41,8 +45,10 @@ Wi-Fi; no internet connection is needed.
 
 ## Using it from a phone
 
-Join the sign's Wi-Fi; the sign-in window opens the control page. From any
-network the sign is on, the page is at `http://protest.local`.
+Join the sign's Wi-Fi; the sign-in window opens the control page. Its AP
+address is `http://<hostname>.<suffix>`, where the suffix is selected in
+`/etc/protest/ap.env`. On another network, Avahi makes the device available as
+`http://<hostname>.local`.
 
 The iPhone sign-in window is limited: it cannot save downloads. Open the page
 in Safari to download a backup or log bundle. After a software update, reload
@@ -51,8 +57,9 @@ the page.
 ## Install and deploy
 
 The appliance runs as root because the matrix driver needs direct hardware
-access. The systemd unit still limits filesystem writes to `/var/lib/protest`
-and `/var/log/protest`.
+access. For upgrade compatibility, existing installations retain the
+`protest` service name and `/opt/protest`, `/etc/protest`, `/var/lib/protest`,
+and `/var/log/protest` paths. The UI and product are named MatrixMarquee.
 
 From an operator machine (non-interactive, auditable):
 
@@ -60,9 +67,10 @@ From an operator machine (non-interactive, auditable):
 scripts/deploy.sh --host protest.local --user root
 ```
 
-The host defaults to `protest.local` and is configurable by `--host` or
-`PROTEST_DEPLOY_HOST`. SSH uses batch mode and strict host-key checking, so
-connect once with `ssh root@protest.local` to accept the host key. Deployment never transfers `.env` files,
+The deployment host is configurable by `--host` or `PROTEST_DEPLOY_HOST`; the
+default remains `protest.local` for existing installations. SSH uses batch
+mode and strict host-key checking, so connect once to the configured host to
+accept its host key. Deployment never transfers `.env` files,
 runtime data, media, or credentials. Each deploy creates a timestamped release
 under `/opt/protest/releases`, atomically repoints `/opt/protest/current`, and
 keeps the newest five releases (`KEEP_RELEASES`).
@@ -91,13 +99,16 @@ scripts/health-check.sh
 systemctl restart protest
 ```
 
-### The protest.local name
+### Device names and the AP address
 
-The installer sets up `avahi-daemon`, which announces the sign as
-`<hostname>.local` on every network it joins, along with its web UI. With the
-hostname `protest` that is `protest.local`; on the sign's own Wi-Fi the AP's
-DNS answers the same name. If two signs share a network, the second becomes
-`protest-2.local`; give each its own hostname to tell them apart.
+The installer sets up `avahi-daemon`, which announces the device as
+`<hostname>.local` on networks it joins. On the sign's own Wi-Fi, set
+`AP_DOMAIN_SUFFIX` in `/etc/protest/ap.env` to choose
+`<hostname>.local` or `<hostname>.home.arpa`. The default is `local`.
+`.home` is deliberately not offered: the IETF reserves `home.arpa` for local
+home-network names ([RFC 8375](https://www.rfc-editor.org/rfc/rfc8375.html)).
+The AP domain choice does not change the device hostname or its Avahi name.
+Give each sign a distinct hostname when multiple signs share a network.
 
 ## Configuration
 
@@ -198,6 +209,9 @@ install -m 0600 deploy/ap/ap.env.example /etc/protest/ap.env
 editor /etc/protest/ap.env
 ```
 
+Choose `AP_DOMAIN_SUFFIX=local` or `AP_DOMAIN_SUFFIX=home.arpa` in that file.
+The setup script rejects other suffixes before changing network configuration.
+
 Use a dedicated Wi-Fi interface that does not carry the default route. The
 default AP network is `10.42.0.0/24`; verify it does not overlap another local
 network. Only after local/console recovery is available, apply explicitly:
@@ -219,6 +233,9 @@ tethering or a second Wi-Fi adapter joining the phone's hotspot.
 
 There is no login: anyone who knows the Wi-Fi passphrase, or can reach the
 wired address, can control the sign. Choose the passphrase accordingly.
+The Settings network panel reports whether the access point and upstream
+connection are available; it does not expose the device hostname, local IP
+address, or Wi-Fi network name.
 
 To recover, connect locally; disable `hostapd`, `dnsmasq`, and
 `protest-ap-interface`; remove their three generated configuration/unit files;

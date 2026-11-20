@@ -81,6 +81,8 @@ h3 { margin-bottom: 4px; font-size: 15px; }
 .button.danger-fill { color: #24000b; background: var(--danger); border-color: var(--danger); }
 .button.small { min-height: 38px; padding: 7px 11px; font-size: 13px; }
 .button:disabled { opacity: .5; cursor: not-allowed; }
+a.button.locked { opacity: .5; pointer-events: none; }
+input[type=range]:disabled { opacity: .45; }
 .icon-button { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: 8px; font-size: 24px; }
 .icon-button:hover { color: var(--text); background: var(--surface-raised); }
 .text-button, .text-link { min-height: 38px; padding: 8px 2px; color: var(--accent); background: transparent; border: 0; text-decoration: none; font-weight: 700; }
@@ -228,6 +230,9 @@ dialog form { display: grid; gap: 15px; padding: 19px; }
 .health-banner.critical { color: #2c0712; background: #ff9ab8; }
 .health-banner p { flex: 1; margin: 0; }
 .health-banner .text-link { color: inherit; text-decoration: underline; }
+.presence-line { margin: -8px 0 18px; color: var(--muted); font-size: 14px; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 12px; }
+.inline-form label { flex: 1 1 180px; }
 .health-icon { font-size: 20px; }
 .pill.warning { color: var(--warning); border-color: rgba(255,209,102,.4); }
 .pill.critical { color: var(--danger); border-color: rgba(255,114,155,.4); }

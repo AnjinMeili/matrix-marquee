@@ -1,15 +1,16 @@
 <?xml version="1.0" standalone='no'?>
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
-<!-- Announces the sign's web UI over mDNS on every network it joins.
-     The host itself answers as <hostname>.local (protest.local by default). -->
+<!-- Announces the device's web UI over mDNS on every network it joins.
+     Its host name is configured by the operating system. -->
 <service-group>
-  <name replace-wildcards="yes">Protest sign (%h)</name>
+  <name replace-wildcards="yes">MatrixMarquee (%h)</name>
   <service>
     <type>_http._tcp</type>
     <port>80</port>
     <txt-record>path=/</txt-record>
   </service>
   <service>
+    <!-- Retain this legacy service type so existing discovery clients keep working. -->
     <type>_protest-sign._tcp</type>
     <port>80</port>
     <txt-record>api=/api/status</txt-record>

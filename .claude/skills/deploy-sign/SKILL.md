@@ -1,13 +1,14 @@
 ---
 name: deploy-sign
-description: Deploy this project to the protest sign (the Raspberry Pi at protest.local) and verify it on the hardware. Use whenever the owner says "deploy", asks to put a change on the sign, roll back a release, or check that the sign is healthy after a change, a reboot, or a power cycle. Covers the explicit-approval rule, the database backup before schema changes, the deploy itself, the read-only verification script, exercising the new feature on the real panel, and rollback.
+description: Deploy MatrixMarquee to the existing sign (the Raspberry Pi currently at protest.local) and verify it on the hardware. Use whenever the owner says "deploy", asks to put a change on the sign, roll back a release, or check that the sign is healthy after a change, a reboot, or a power cycle. Covers the explicit-approval rule, the database backup before schema changes, the deploy itself, the read-only verification script, exercising the new feature on the real panel, and rollback.
 ---
 
-# Deploying to the sign
+# Deploying MatrixMarquee to the sign
 
-The sign is a Raspberry Pi 4 on DietPi, reachable as `protest.local` over SSH as
-root. A deploy restarts the service, so the panel blanks for a few seconds and
-then resumes the playlist where it left off. Bugs that never showed in tests
+The existing sign is a Raspberry Pi 4 on DietPi, reachable as `protest.local`
+over SSH as root. Its host name and `protest` runtime paths remain unchanged
+for upgrade compatibility. A deploy restarts the service, so the panel blanks
+for a few seconds and then resumes the playlist where it left off. Bugs that never showed in tests
 have shown up on the real sign: frozen iPhone video, a media list returning
 errors, previews too slow over Wi-Fi. So a deploy is not done until it has been
 checked on the hardware.

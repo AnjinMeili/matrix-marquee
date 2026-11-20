@@ -34,4 +34,4 @@ case "$body" in
         exit 1
         ;;
 esac
-printf '%s\n' "protest health check passed"
+printf '%s\n' "MatrixMarquee health check passed"

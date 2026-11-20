@@ -46,8 +46,8 @@ desks) can drive the sign.
 |---|---|
 | **The panel's GPIO can be driven by only one process** | `matrix-dmx` and this project's player cannot both show on the panel |
 | **Port 80 is the sign's web UI and captive portal** (uvicorn) | `matrix-dmx` cannot serve the WLED API. Without it, it logs a warning and runs Art-Net, sACN, and DDP only |
-| **mDNS on 5353**: Avahi already announces `protest.local` | Both set `SO_REUSEADDR`, so they could share the port, but two responders on one host is fragile. Better to let Avahi do it all |
-| **Both repositories are private** | Fine today; an open-source release of this project would need the receiver public too |
+| **mDNS on 5353**: Avahi already announces the configured `<hostname>.local` | Both set `SO_REUSEADDR`, so they could share the port, but two responders on one host is fragile. Better to let Avahi do it all |
+| **Source release** | If MatrixMarquee is published, the receiver source and licence must also be available |
 | **Repository size:** MatrixPrism is small (a 2.4 MB pack), but the submodule brings the composer as well | The receiver "stands alone" per its README; a repository of its own would be the cleaner submodule |
 | **The nested rpi-rgb-led-matrix submodule** | Not needed: build against `/opt/rpi-rgb-led-matrix`, which the sign already has, with `make RGB_INCDIR=… RGB_LIBDIR=…` |
 | **The UDP ports are free on the sign, and `net.core.rmem_max` is already 4 MB** | No conflicts; the sign meets the receiver's buffer advice |
@@ -57,7 +57,7 @@ desks) can drive the sign.
 
 ### A. Switch modes: works now, with no change to MatrixPrism
 
-- `matrix-dmx` runs as its own service, `protest-receiver.service`, with the
+- `matrix-dmx` runs as its own service, `matrix-marquee-receiver.service`, with the
   sign's matrix flags from `protest.env` plus `--no-wled`.
 - A "Live input" switch in Settings stops this project's player, releases the
   panel, and starts the receiver. Switching back reverses it. Releasing the
@@ -88,9 +88,9 @@ assembled frame written to a local socket or FIFO, framed like its own
 - **serves the WLED JSON API on its own port 80,** by porting the receiver's
   small JSON builders, and adds `_wled._tcp` to the Avahi service file. The
   receiver runs with `--no-wled`. WLED apps then find the sign as
-  `protest.local`, and there's one mDNS responder.
+  the configured `<hostname>.local`, and there's one mDNS responder.
 
-**Changes in MatrixPrism (owner's project):**
+**Changes in MatrixPrism (maintained separately):**
 
 - an output interface in `matrix-dmx.cc`, which creates the matrix
   unconditionally today;
@@ -125,7 +125,7 @@ restart) turns both off:
   approved stream showing. It takes Discoverable off with it, so a sign left
   receiving drops back to invisible. Each approved stream restarts the
   5 minutes when it ends.
-- The receiver runs as its own service, `protest-receiver.service`, started
+- The receiver runs as its own service, `matrix-marquee-receiver.service`, started
   and stopped by the app and never enabled at boot. A forgotten switch can't
   survive a power cycle.
 
@@ -230,19 +230,19 @@ the operator PIN. Viewing and being notified stay open.
 ## The receiver's own repository: matrix-jack
 
 Decided 2026-10-17: the receiver moves out of MatrixPrism into a repository
-of its own, **matrix-jack** (`AnjinMeili/matrix-jack`). Its programs keep
-their names, `matrix-dmx` and `scene-tool`, unless the owner renames them. It is one of three applications for managing matrix displays
+of its own, **matrix-jack**. Its programs keep
+their names, `matrix-dmx` and `scene-tool`, unless renamed separately. It is one of three applications for managing matrix displays
 with varied information:
 
 | Application | Role |
 |---|---|
-| **Protest** (this repository) | the sign's player and manager: messages, playlists, media, the phone UI, health |
+| **MatrixMarquee** (this repository) | the sign's player and manager: messages, playlists, media, the phone UI, health |
 | **MatrixPrism** | music-driven visuals, composed on a laptop and streamed out |
 | **matrix-jack**, the receiver (`matrix-dmx` and `scene-tool`) | Art-Net, sACN, and DDP in, frames out to a panel or (with the bridge) to an application |
 
-Both Protest and MatrixPrism then use the receiver as a submodule.
+Both MatrixMarquee and MatrixPrism then use the receiver as a submodule.
 
-**Splitting it out, in MatrixPrism, with the owner:**
+**Splitting it out of MatrixPrism:**
 
 1. `git subtree split --prefix=receiver` keeps the receiver's history on a
    branch of its own.
@@ -254,15 +254,15 @@ Both Protest and MatrixPrism then use the receiver as a submodule.
    repository, with its own tests (`make test` runs without hardware).
 
 **Visibility:** the new repository can be private now and made public when
-Protest is released, independently of MatrixPrism.
+MatrixMarquee is released, independently of MatrixPrism.
 
-### Build and promote, following Protest
+### Build and promote, following MatrixMarquee
 
-The new repository gets the same release process as Protest, so all three
-applications deploy, verify, and roll back the same way. Protest's pieces and
+The new repository gets the same release process as MatrixMarquee, so all three
+applications deploy, verify, and roll back the same way. MatrixMarquee's pieces and
 their receiver counterparts:
 
-| Stage | Protest today | Receiver repository |
+| Stage | MatrixMarquee today | Receiver repository |
 |---|---|---|
 | **Test** | `python -m pytest` (with the UI check) | `make test`: protocol, mapping, recording, scene tests, no hardware |
 | **Ship** | `scripts/deploy.sh --host …`: rsync over SSH (batch mode, strict host keys), never secrets or data | `scripts/deploy.sh`, the same options and safeguards, `MATRIX_JACK_DEPLOY_HOST` |
@@ -273,16 +273,16 @@ their receiver counterparts:
 | **Run** | `protest.service`, a sandboxed systemd unit, settings in `/etc/protest/protest.env` | `matrix-jack.service`, with panel flags and universes in `/etc/matrix-jack/matrix-jack.env`, never overwritten by a deploy |
 | **Operate** | health timer, persistent journald, log bundle, configuration backup | the same pieces, scaled down: journald retention and a log bundle |
 | **Agents** | `AGENTS.md` and `CLAUDE.md`; skills `deploy-sign` and `ui-check` | `AGENTS.md` and `CLAUDE.md`; a `deploy-matrix-jack` skill with the same explicit-"deploy" rule |
-| **Release** | commits on `main`, pushed on request | the same, plus **tags** (`v0.x.y`). Protest and MatrixPrism pin a tagged release as their submodule, and move to a newer tag deliberately |
+| **Release** | commits on `main`, pushed on request | the same, plus **tags** (`v0.x.y`). MatrixMarquee and MatrixPrism pin a tagged release as their submodule, and move to a newer tag deliberately |
 
 **Two ways it is installed:**
 
-1. **Standalone,** as on the owner's 256×192 receiver Pi:
+1. **Standalone,** on a dedicated receiver display:
    `matrix-jack.service` is enabled at boot and drives the panel.
-2. **Inside Protest,** as the bridge:
-   - Protest's `install.sh` calls the receiver's own build script on the
+2. **Inside MatrixMarquee,** as the bridge:
+   - MatrixMarquee's `install.sh` calls the receiver's own build script on the
      submodule commit and caches the binary under `/opt/protest/bin/`.
-   - Protest starts the on-demand `protest-receiver.service` only when an
+   - MatrixMarquee starts the on-demand `matrix-marquee-receiver.service` only when an
      admin turns receiving on, never at boot, as the rules above require.
    - One build script serves both, so the two installs can't diverge.
 
@@ -296,7 +296,7 @@ their receiver counterparts:
 - the same approval rules for agents.
 
 If the three keep drifting apart, these scripts could later become one
-shared deploy kit; until then, copying Protest's scripts and adapting them is
+shared deploy kit; until then, copying MatrixMarquee's scripts and adapting them is
 simpler.
 
 ## Submodule mechanics (either way)
@@ -340,7 +340,7 @@ simpler.
   window.
 - **The windows are declared settings**, not fixed in code: persisted, PIN
   protected, and with defaults as in "Declared windows" above.
-- **The receiver gets its own repository, matrix-jack,** shared by Protest
+- **The receiver gets its own repository, matrix-jack,** shared by MatrixMarquee
   and MatrixPrism as one of three applications for matrix displays.
 - **Granted senders (2026-10-19):** a sender whose saved profile grants
   "Show without asking" shows without a new request while receiving is on;
@@ -350,22 +350,59 @@ simpler.
 ## Phases
 
 0. **Split the receiver into its own repository** (in MatrixPrism; see
-   above), with Protest's build and promote process: tests, deploy,
+   above), with MatrixMarquee's build and promote process: tests, deploy,
    build, promote, verify, rollback, a systemd unit, `AGENTS.md`, a
    `deploy-matrix-jack` skill, and tagged releases. Not needed for phases 1–2.
 1. **The messaging channel** (`/api/events`) with presence and
    notifications for things that exist today: health, skipped items, and
-   activity. Useful on its own; no MatrixPrism changes.
+   activity. Useful on its own; no MatrixPrism changes. **Built 2026-10-19**
+   (see "As built: the messaging channel").
 2. **The operator PIN,** so approvals and changes need a trusted phone.
 3. **The MatrixPrism bridge output,** with frame source metadata and
    `--no-artpoll`, and the submodule with its cached build.
 4. **The live input source:** the two runtime switches (off at start-up),
-   the 5-minute idle timeout, `protest-receiver.service` started on demand,
+   the 5-minute idle timeout, `matrix-marquee-receiver.service` started on demand,
    and display requests with approval, expiry, the live banner, and resuming
    the playlist.
 5. **Discoverable:** the WLED JSON API and `_wled._tcp`, served by this
    project only while the switch is on.
 6. **Optional:** trusted senders and an address allow-list.
+
+## As built: the messaging channel (2026-10-19)
+
+- **Where:** `events.py` (`EventHub`, the `ChangeAnnouncer` middleware, and a
+  log filter) and the WebSocket route `/api/events`.
+- **Events from the sign:** `welcome` (the page's session id and starting
+  name), `presence` (everyone connected, by name), `activity` (an area
+  changed: playlists, messages, library, sign, or display, and which session
+  did it), `health` (a heat or power problem starting or clearing), and
+  `playback_warning` (an item skipped). Each has a sequence number and time.
+- **Activity needs no per-route code:** a pure ASGI middleware announces any
+  successful POST, PUT, PATCH, or DELETE under those areas, leaving out
+  previews. Pages send their session id as `X-Session`, so other phones can
+  say who made a change and a page skips its own. The header is a courtesy,
+  not proof; the PIN is what will make approvals trustworthy.
+- **From a page:** `hello` with a saved name. A name is printable, one line,
+  and at most 30 characters; the starting name comes from the browser ("an
+  iPhone", "a Mac"). The name is kept on the phone (`localStorage`) and set
+  in Settings under "This phone".
+- **On the page:** a "Also connected: …" line on the Sign page, notices for
+  other phones' changes, health problems, and skipped items, and a reload
+  shortly after someone else's change (never under an open dialog). The page
+  reconnects with back-off up to 30 s and reloads once to catch up.
+- **Limits:** 32 open pages (more are turned away), 100 queued events per
+  page (oldest dropped), messages from a page up to 1,024 characters.
+  Publishing never blocks: the render thread and health monitor hand events
+  to the web server's loop.
+- **Logs:** connects and disconnects are debug-level, and uvicorn's
+  WebSocket handshake and "connection open/closed" lines for `/api/events`
+  are filtered out. Names are never logged.
+- **Still polling:** the Sign page keeps its 3-second status poll, for the
+  progress line and as a fallback; dropping it can follow once the channel
+  has run on the sign for a while.
+- **Not yet:** `display_request`, `display_decided`, `live_started`,
+  `live_ended`, and the `allow`, `deny`, and `stop_live` answers, which come
+  with live input (phase 4).
 
 ## Still open
 

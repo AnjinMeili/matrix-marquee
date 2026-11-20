@@ -1,5 +1,5 @@
 [Unit]
-Description=Protest RGB matrix media appliance
+Description=MatrixMarquee RGB matrix signage appliance
 After=network.target
 Wants=network.target
 

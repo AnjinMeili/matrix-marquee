@@ -36,6 +36,16 @@ done
 : "${AP_ADDRESS:?missing AP_ADDRESS}"
 : "${DHCP_START:?missing DHCP_START}"
 : "${DHCP_END:?missing DHCP_END}"
+AP_DOMAIN_SUFFIX=${AP_DOMAIN_SUFFIX:-local}
+case "$AP_DOMAIN_SUFFIX" in
+    local|home.arpa) : ;;
+    *) echo "AP_DOMAIN_SUFFIX must be 'local' or 'home.arpa'" >&2; exit 2 ;;
+esac
+AP_HOSTNAME=$(hostname -s)
+case "$AP_HOSTNAME" in
+    ''|-*|*-|*[!A-Za-z0-9-]*) echo "system hostname must be a DNS label to configure the AP" >&2; exit 2 ;;
+esac
+[ "${#AP_HOSTNAME}" -le 63 ] || { echo "system hostname must be at most 63 characters" >&2; exit 2; }
 
 case "$AP_INTERFACE" in *[!A-Za-z0-9_.-]*) echo "invalid interface" >&2; exit 2;; esac
 case "$AP_SSID" in *[!A-Za-z0-9_.@%+=:-]*) echo "SSID contains unsupported characters" >&2; exit 2;; esac
@@ -88,6 +98,8 @@ render() {
         -e "s|@AP_PASSPHRASE@|$AP_PASSPHRASE|g" \
         -e "s|@AP_COUNTRY@|$AP_COUNTRY|g" \
         -e "s|@AP_CHANNEL@|$AP_CHANNEL|g" \
+        -e "s|@AP_HOSTNAME@|$AP_HOSTNAME|g" \
+        -e "s|@AP_DOMAIN_SUFFIX@|$AP_DOMAIN_SUFFIX|g" \
         -e "s|@AP_ADDRESS@|$AP_ADDRESS|g" \
         -e "s|@DHCP_START@|$DHCP_START|g" \
         -e "s|@DHCP_END@|$DHCP_END|g" "$1" > "$2"
@@ -98,7 +110,7 @@ render "$TEMPLATE_DIR/hostapd.conf.template" /etc/hostapd/hostapd.conf
 render "$TEMPLATE_DIR/dnsmasq.conf.template" /etc/dnsmasq.d/protest.conf
 cat > /etc/systemd/system/protest-ap-interface.service <<EOF
 [Unit]
-Description=Configure dedicated Protest AP interface
+Description=Configure dedicated MatrixMarquee AP interface
 Before=hostapd.service dnsmasq.service
 After=sys-subsystem-net-devices-${AP_INTERFACE}.device
 BindsTo=sys-subsystem-net-devices-${AP_INTERFACE}.device

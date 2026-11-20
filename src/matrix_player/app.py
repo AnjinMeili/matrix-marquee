@@ -1,5 +1,6 @@
 """FastAPI application factory and command-line entry point."""
 
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import json
@@ -11,9 +12,11 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from .access import AccessControl
 from .backup import remove_stale_archives
 from .config import Settings
 from .database import Database
+from .events import ChangeAnnouncer, EventHub, QuietWebSocketFilter
 from .health import HealthMonitor
 from .maintenance import start_library_checks
 from .matrix import MatrixAdapter, MatrixConfig, MockMatrixAdapter, RGBMatrixAdapter
@@ -24,7 +27,10 @@ from .playback import (
     UnavailablePlaybackController,
 )
 from . import display
-from .routes import captive, display as display_routes, media, playback, playlists, system, text_panels
+from .routes import (
+    captive, display as display_routes, events as events_routes, media, operator, playback, playlists, system,
+    text_panels,
+)
 from .storage import MediaStorage
 from .transcode import VideoProxyWorker
 from .usage import UsageRecorder
@@ -85,6 +91,9 @@ def configure_logging(level: str) -> None:
     access = logging.getLogger("uvicorn.access")
     if not any(isinstance(existing, PollingAccessFilter) for existing in access.filters):
         access.addFilter(PollingAccessFilter())
+    server = logging.getLogger("uvicorn.error")
+    if not any(isinstance(existing, QuietWebSocketFilter) for existing in server.filters):
+        server.addFilter(QuietWebSocketFilter())
 
 
 def create_app(
@@ -97,6 +106,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configured.ensure_directories()
+        app.state.events.bind(asyncio.get_running_loop())
         app.state.database.initialize()
         remove_stale_archives(configured)
         start_library_checks(app.state.database, app.state.storage, configured)
@@ -115,8 +125,10 @@ def create_app(
                 adapter = matrix_adapter or _create_matrix(configured)
                 app.state.matrix = adapter
                 adapter.set_correction(display.load(app.state.database))
+                service = PlaybackService(adapter)
+                service.notify = app.state.events.publish
                 app.state.playback = DatabasePlaybackController(
-                    PlaybackService(adapter), app.state.database, app.state.storage, app.state.usage
+                    service, app.state.database, app.state.storage, app.state.usage
                 )
                 app.state.matrix_connected = True
                 app.state.matrix_error = None
@@ -169,7 +181,7 @@ def create_app(
 
     configure_logging(configured.log_level)
     app = FastAPI(
-        title="RGB Matrix Player",
+        title="MatrixMarquee",
         version="0.1.0",
         lifespan=lifespan,
         docs_url="/api/docs",
@@ -179,7 +191,10 @@ def create_app(
     app.state.database = Database(configured.database_path)
     app.state.storage = MediaStorage(configured)
     app.state.proxies = VideoProxyWorker(app.state.storage)
+    app.state.events = EventHub()
+    app.state.access = AccessControl(configured.operator_state_path, configured.operator_pin)
     app.state.health = HealthMonitor(app.state.database)
+    app.state.health.notify = app.state.events.publish
     app.state.usage = UsageRecorder(app.state.database)
     app.state.playback = playback_controller
     app.state.matrix = matrix_adapter
@@ -193,6 +208,9 @@ def create_app(
     app.include_router(playback.router)
     app.include_router(display_routes.router)
     app.include_router(captive.router)
+    app.include_router(events_routes.router)
+    app.include_router(operator.router)
+    app.add_middleware(ChangeAnnouncer, hub=app.state.events)
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.is_dir():
@@ -208,8 +226,8 @@ def create_app(
             )
         return HTMLResponse(
             "<!doctype html><html><head><meta name='viewport' "
-            "content='width=device-width,initial-scale=1'><title>Matrix Player</title>"
-            "</head><body><h1>Matrix Player</h1><p>Service is ready.</p></body></html>"
+            "content='width=device-width,initial-scale=1'><title>MatrixMarquee</title>"
+            "</head><body><h1>MatrixMarquee</h1><p>Service is ready.</p></body></html>"
         )
 
     @app.get("/health", include_in_schema=False)

@@ -578,30 +578,46 @@ def test_backup_downloads_everything_except_secrets_and_proxies(tmp_path: Path, 
         response = client.get("/api/backup")
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/zip"
-        assert "protest-backup-" in response.headers["content-disposition"]
+        assert "matrix-marquee-backup-" in response.headers["content-disposition"]
 
         archive = tmp_path / "downloaded.zip"
         archive.write_bytes(response.content)
         with zipfile.ZipFile(archive) as bundle:
             names = set(bundle.namelist())
-            manifest = json.loads(bundle.read("protest-backup/manifest.json"))
-            bundle.extract("protest-backup/database/db.sqlite3", tmp_path / "out")
-        assert f"protest-backup/media/{media['filename']}" in names
-        assert f"protest-backup/thumbnails/{media['thumbnail_path']}" in names
-        assert "protest-backup/README.txt" in names
+            manifest = json.loads(bundle.read("matrix-marquee-backup/manifest.json"))
+            bundle.extract("matrix-marquee-backup/database/db.sqlite3", tmp_path / "out")
+        assert f"matrix-marquee-backup/media/{media['filename']}" in names
+        assert f"matrix-marquee-backup/thumbnails/{media['thumbnail_path']}" in names
+        assert "matrix-marquee-backup/README.txt" in names
         assert not any(name.endswith((".play.mp4", ".env")) or ".upload-" in name for name in names)
         assert manifest["counts"]["text_panels"] == 1 and manifest["counts"]["tags"] == 1
 
-        restored = sqlite3.connect(tmp_path / "out" / "protest-backup" / "database" / "db.sqlite3")
+        restored = sqlite3.connect(tmp_path / "out" / "matrix-marquee-backup" / "database" / "db.sqlite3")
         assert restored.execute("SELECT content FROM text_panels").fetchone()[0] == "NO KINGS"
         restored.close()
-        assert not list(tmp_path.glob(".protest-backup-*.zip"))
+        assert not list(tmp_path.glob(".matrix-marquee-backup-*.zip"))
         assert not list(tmp_path.glob(".backup-*"))
 
         import matrix_player.backup as backup_module
 
         monkeypatch.setattr(backup_module.shutil, "disk_usage", lambda _path: shutil._ntuple_diskusage(10, 10, 0))
         assert client.get("/api/backup").status_code == 507
+
+
+def test_stale_backup_cleanup_keeps_legacy_and_new_names_compatible(tmp_path: Path) -> None:
+    from matrix_player.backup import remove_stale_archives
+
+    settings = make_settings(tmp_path)
+    settings.ensure_directories()
+    legacy = settings.data_dir / ".protest-backup-stale.zip"
+    current = settings.data_dir / ".matrix-marquee-backup-stale.zip"
+    legacy.touch()
+    current.touch()
+
+    remove_stale_archives(settings)
+
+    assert not legacy.exists()
+    assert not current.exists()
 
 
 def gif_bytes(delays: List[int]) -> bytes:

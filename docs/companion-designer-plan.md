@@ -9,7 +9,7 @@ message designs, and playlists, ready to load onto the sign.
 
 ## Constraints that shape it
 
-- **The sign is offline at a protest.** An LLM needs the internet, so the
+- **The sign is offline at an event.** An LLM needs the internet, so the
   design work happens where the internet is: a laptop or phone on its own
   connection, before or during the event. The sign only receives finished
   designs.
@@ -27,7 +27,7 @@ message designs, and playlists, ready to load onto the sign.
 ## Recommended shape
 
 ```
- brief ─► Sign Studio (laptop/phone, has internet) ─► design pack (JSON) ─► sign at protest.local
+ brief ─► Sign Studio (laptop/phone, has internet) ─► design pack (JSON) ─► MatrixMarquee
            │  Claude + tools                              │                  POST /api/import
            │  renders with the sign's own renderer        └─► or a file, imported from Settings
 ```
@@ -37,8 +37,8 @@ message designs, and playlists, ready to load onto the sign.
    (`matrix_player.rendering`), so its previews and readability checks are
    exactly what the panel will show, with no sign needed.
 2. **Design packs**: a versioned JSON file of messages and playlists. Sign
-   Studio sends a pack to `http://protest.local` when the sign is
-   reachable, or saves it to import later. Packs are also easy to share
+   Studio sends a pack to the configured AP address when the sign is reachable,
+   or saves it to import later. Packs are also easy to share
    between people.
 3. **On the sign**, one addition: `POST /api/import` (validate everything
    first, then create in one transaction; on name clashes, rename rather
@@ -118,7 +118,7 @@ API specifics that matter here:
   `auto` with instructions, and structured outputs for the final pack.
 - **Refusals:** check `stop_reason == "refusal"` before reading content,
   and enable the server-side fallback (`fallbacks: "default"`, beta
-  `server-side-fallback-2026-07-01`). A protest slogan that is heated but
+  `server-side-fallback-2026-07-01`). A slogan that is heated but
   legitimate should be retried there rather than dropped.
 - **Cost:** a session of a few drafts with small images is likely to cost
   tens of cents. Measure it on real briefs before quoting a number.

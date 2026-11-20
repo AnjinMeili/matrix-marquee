@@ -7,7 +7,7 @@ set -eu
 install -d -m 0700 "$BUNDLE_DIR"
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 work="$BUNDLE_DIR/.bundle-$stamp"
-archive="$BUNDLE_DIR/protest-logs-$stamp.tar.gz"
+archive="$BUNDLE_DIR/matrix-marquee-logs-$stamp.tar.gz"
 install -d -m 0700 "$work"
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 
@@ -25,4 +25,3 @@ ip -brief link > "$work/network-links.txt"
 tar -czf "$archive" -C "$work" .
 chmod 0600 "$archive"
 echo "$archive"
-

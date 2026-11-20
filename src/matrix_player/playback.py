@@ -149,6 +149,8 @@ class PlaybackService:
         self._paused_total = 0.0
         self._frames_shown = 0
         self._warnings: Dict[object, str] = {}
+        # Called with (event type, fields) when an item is first skipped; the app points it at open pages.
+        self.notify: Callable[..., None] = lambda *event, **fields: None
 
     @property
     def state(self) -> RendererState:
@@ -484,6 +486,7 @@ class PlaybackService:
                             "playback_item_failed",
                             extra={"item_id": item.item_id, "error": str(error)},
                         )
+                        self.notify("playback_warning", text=f"Skipped {label}: {error}", item_id=item.item_id)
                 if self._stopping():
                     break
                 if self._frames_shown == shown_before:

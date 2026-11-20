@@ -1,10 +1,10 @@
 # Agent guide
 
-Instructions for an AI coding agent working in this repository: the software
-for a protest sign, a Raspberry Pi 4 driving HUB75 panels as one display,
-controlled from a phone over the sign's own Wi-Fi. The first build is three
-outdoor 64×32 panels as one 96×64 display; more signs of many sizes will
-follow.
+Instructions for an AI coding agent working in this repository: MatrixMarquee
+is offline-first signage and information-display software for a Raspberry Pi
+driving HUB75 panels as one display, controlled from a phone over the
+display's own Wi-Fi. The first build is three outdoor 64×32 panels as one
+96×64 display; more signs of many sizes will follow.
 `CLAUDE.md` imports this file, so Claude Code loads it at the start of every
 session.
 
@@ -18,7 +18,8 @@ session.
    LLM sign designer, street-sound counting, text reveals and transitions
    (built), the Pico sensor agent, receiving pixel protocols, and the layer
    mixer with known senders (WLED output was dropped).
-4. [needs.txt](needs.txt): the owner's own goals, as written. Do not edit it.
+4. [needs.txt](needs.txt): owner-authored project notes. Do not edit it or
+   include it in public materials without explicit approval.
 
 ## Which skill to load
 
@@ -39,8 +40,8 @@ session.
 - **"Plan" means a document, not code.** Write `docs/<topic>-plan.md` and add a
   line to `PROJECT_PLAN.md` §14 ("Status and open items").
 - **The owner builds the hardware and knows it well,** so technical hardware
-  detail is welcome. The sign's UI is for non-technical protesters, so its copy
-  stays plain.
+  detail is welcome. The sign's UI is for non-technical operators, so its
+  copy stays plain.
 
 ## Environment
 
@@ -49,8 +50,9 @@ session.
   (Homebrew's is `/opt/homebrew/bin`). Still check video work on the Pi, which
   has the real decoder and frame budget.
 - **The sign:** DietPi, Python 3.13, Pillow 12.3, ffmpeg, and the
-  rpi-rgb-led-matrix wheel. Reach it as `protest.local`; never write an IP
-  address into the repo.
+  rpi-rgb-led-matrix wheel. Use the configured host name; never write a
+  device-specific IP address into the repo. Existing installs retain legacy
+  `protest` service and data paths for compatibility.
 - **Running the app without hardware:**
   `MATRIX_PLAYER_MATRIX_MODE=mock MATRIX_PLAYER_DATA_DIR=<dir> uvicorn matrix_player.app:app`
   with `PYTHONPATH=src`.
@@ -101,9 +103,9 @@ session.
 - **The heaviest load** is video or animation with a white or yellow
   background: about 80% of full white, frame after frame. The panel's
   brightness curve means 50% brightness draws about a fifth of the current.
-- **Battery:** the first sign rides on a wheelchair and runs from battery
-  packs, so power is runtime and weight. Keep bright content possible (white is
-  wanted for impact) and manage the draw instead: see the power items in
-  `PROJECT_PLAN.md` §14 and `docs/sensor-agent-plan.md`.
+- **Battery:** portable signs may run from battery packs, so power is runtime
+  and weight. Keep bright content possible (white is wanted for impact) and
+  manage the draw instead: see the power items in `PROJECT_PLAN.md` §14 and
+  `docs/sensor-agent-plan.md`.
 - **Diffuser:** the sign sits behind one, so 1 px detail blurs. Heavy fonts with
   an outline read best.

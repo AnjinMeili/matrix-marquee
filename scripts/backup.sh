@@ -5,7 +5,7 @@ set -eu
 [ "$(id -u)" -eq 0 ] || { echo "must run as root" >&2; exit 1; }
 install -d -m 0700 "$BACKUP_DIR"
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
-archive="$BACKUP_DIR/protest-config-$stamp.tar.gz"
+archive="$BACKUP_DIR/matrix-marquee-config-$stamp.tar.gz"
 
 # Deliberately excludes environment files, credentials, DBs, media, uploads,
 # thumbnails, logs, and all user-authored content.
@@ -22,4 +22,3 @@ tar -czf "$archive" \
     2>/dev/null
 chmod 0600 "$archive"
 echo "$archive"
-

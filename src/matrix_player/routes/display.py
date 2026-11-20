@@ -8,7 +8,7 @@ from .. import display
 from ..database import Database
 from ..playback import PlaybackController, PlaybackError
 from ..schemas import DisplaySettings, PlaybackState
-from .dependencies import get_database, get_playback
+from .dependencies import get_database, get_playback, require_operator
 
 router = APIRouter(prefix="/api/display", tags=["display"])
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ def get_display(database: Database = Depends(get_database)) -> DisplaySettings:
     return _settings(display.load(database))
 
 
-@router.put("", response_model=DisplaySettings)
+@router.put("", response_model=DisplaySettings, dependencies=[Depends(require_operator)])
 def update_display(
     body: DisplaySettings, request: Request, database: Database = Depends(get_database)
 ) -> DisplaySettings:
@@ -40,7 +40,7 @@ def update_display(
     return _settings(correction)
 
 
-@router.post("/test-card", response_model=PlaybackState)
+@router.post("/test-card", response_model=PlaybackState, dependencies=[Depends(require_operator)])
 def show_test_card(
     request: Request, playback: PlaybackController = Depends(get_playback)
 ) -> PlaybackState:

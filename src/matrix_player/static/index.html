@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0a0f18">
-  <title>Matrix Player</title>
+  <title>MatrixMarquee</title>
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/app.js" defer></script>
 </head>
@@ -12,9 +12,9 @@
   <a class="skip-link" href="#content">Skip to content</a>
   <div class="app-shell">
     <aside class="sidebar">
-      <a class="brand" href="#dashboard" aria-label="Matrix Player dashboard">
+      <a class="brand" href="#dashboard" aria-label="MatrixMarquee dashboard">
         <span class="brand-mark" aria-hidden="true"></span>
-        <span>Matrix Player</span>
+        <span>MatrixMarquee</span>
       </a>
       <nav class="main-nav" aria-label="Main navigation">
         <a href="#dashboard" data-view="dashboard"><span aria-hidden="true">⌂</span> Sign</a>
@@ -45,6 +45,7 @@
           <p id="health-banner-text"></p>
           <a href="#settings" data-view="settings" class="text-link">Details</a>
         </div>
+        <p id="presence-line" class="presence-line" hidden></p>
         <div class="dashboard-grid">
           <article class="card output-card">
             <div class="card-heading"><div><p class="eyebrow">Showing now</p><h2 id="now-title">Nothing playing</h2></div><span class="pill" id="playback-pill">Stopped</span></div>
@@ -66,7 +67,8 @@
               <button class="button" data-action="start-over" id="restart-button" hidden>⟲ Start over</button>
               <button class="button danger" data-playback="stop" id="stop-button">■ Turn off sign</button>
             </div>
-            <label class="slider quick-brightness">Brightness <output data-out="brightness">100%</output><input type="range" name="brightness" min="5" max="100" step="1" value="100" data-display></label>
+            <label class="slider quick-brightness">Brightness <output data-out="brightness">100%</output><input type="range" name="brightness" min="5" max="100" step="1" value="100" data-display data-guarded></label>
+            <p class="form-help guard-hint" hidden>🔒 Brightness needs the operator PIN. <a href="#settings" class="text-link">Enter it in Settings</a>.</p>
           </article>
           <article class="card quick-card">
             <div class="card-heading"><div><p class="eyebrow">Fast</p><h2>Quick message</h2></div></div>
@@ -155,17 +157,48 @@
           <button class="button" data-action="refresh-diagnostics">Refresh</button>
         </header>
         <div class="settings-grid">
+          <article class="card wide" id="operator-card">
+            <div class="card-heading"><div><p class="eyebrow">Who can change settings</p><h2>Operator PIN</h2></div><span class="pill" id="operator-pill">—</span></div>
+            <p id="operator-message">Checking…</p>
+            <form id="operator-login-form" class="inline-form" hidden>
+              <label>PIN<input name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="off" required></label>
+              <button type="submit" class="button primary">Unlock settings</button>
+            </form>
+            <div id="operator-trusted" hidden>
+              <div class="button-row"><button class="button" data-action="operator-logout">Forget this phone</button></div>
+              <details class="overlay-more">
+                <summary>Change the PIN</summary>
+                <form id="operator-pin-form" class="form-grid">
+                  <label>Current PIN<input name="current_pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="off" required></label>
+                  <label>New PIN (4 to 12 digits)<input name="new_pin" type="password" inputmode="numeric" pattern="[0-9]{4,12}" maxlength="12" autocomplete="off" required></label>
+                  <label>New PIN again<input name="new_pin_again" type="password" inputmode="numeric" pattern="[0-9]{4,12}" maxlength="12" autocomplete="off" required></label>
+                  <div class="full"><button type="submit" class="button">Change PIN</button></div>
+                </form>
+                <p class="form-help">Changing it logs out every other phone.</p>
+              </details>
+            </div>
+          </article>
           <article class="card wide" id="display-card">
             <div class="card-heading"><div><p class="eyebrow">Panel</p><h2>Brightness &amp; gamma</h2></div></div>
             <p class="form-help">Outdoor high-brightness panels can wash out and smear moving pictures. Show the test card, then lower Brightness or raise Gamma until the dark steps in its second row stay separate and bright edges stop trailing.</p>
-            <label class="slider">Brightness <output data-out="brightness">100%</output><input type="range" name="brightness" min="5" max="100" step="1" value="100" data-display></label>
-            <label class="slider">Gamma <output data-out="gamma">1.0</output><input type="range" name="gamma" min="1" max="3" step="0.1" value="1" data-display></label>
+            <p class="form-help guard-hint" hidden>🔒 Locked on this phone: enter the operator PIN above to change these.</p>
+            <label class="slider">Brightness <output data-out="brightness">100%</output><input type="range" name="brightness" min="5" max="100" step="1" value="100" data-display data-guarded></label>
+            <label class="slider">Gamma <output data-out="gamma">1.0</output><input type="range" name="gamma" min="1" max="3" step="0.1" value="1" data-display data-guarded></label>
             <div class="button-row">
-              <button class="button" data-action="test-card">Show test card</button>
+              <button class="button" data-action="test-card" data-guarded>Show test card</button>
               <button class="button" data-playback="release">Back to playlist</button>
-              <button class="button" data-action="reset-display">Reset to normal</button>
+              <button class="button" data-action="reset-display" data-guarded>Reset to normal</button>
             </div>
             <p class="form-help" id="display-status">Changes reach the sign straight away and are kept after a restart. The live preview shows the design itself, before these adjustments.</p>
+          </article>
+          <article class="card" id="phone-card">
+            <div class="card-heading"><div><p class="eyebrow">This phone</p><h2>Your name on the sign</h2></div></div>
+            <p class="form-help">Other people using the sign see this name, and it is shown when you change something.</p>
+            <form id="phone-name-form" class="inline-form">
+              <label>Name<input name="label" maxlength="30" placeholder="an iPhone" autocomplete="nickname"></label>
+              <button type="submit" class="button">Save name</button>
+            </form>
+            <p class="form-help" id="phone-presence">Connecting…</p>
           </article>
           <article class="card"><div class="card-heading"><div><p class="eyebrow">Connection</p><h2>Network</h2></div><span class="status-dot" id="settings-network-dot"></span></div><dl class="metrics" id="network-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl></article>
           <article class="card"><p class="eyebrow">Hardware</p><h2>Matrix profile</h2><dl class="metrics" id="matrix-details"><div><dt>Status</dt><dd>Loading…</dd></div></dl><p class="form-help">Hardware configuration is managed on the appliance.</p></article>
@@ -182,8 +215,8 @@
             <h3 class="heat-events-title">Recent events</h3>
             <ul id="heat-events" class="event-list"></ul>
           </article>
-          <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Safekeeping</p><h2>Back up everything</h2></div></div><p>Saves every message, playlist, tag, picture, and video on the sign into one <b>.zip</b> file on this device.</p><p class="form-help" id="backup-estimate">Working out the size…</p><div class="button-row"><a class="button primary" id="backup-link" href="/api/backup" download>⇩ Download backup</a></div><p class="form-help">On iPhone, open this page in Safari (not the Wi-Fi sign-in pop-up) so the file can be saved to Files. Passwords are never included.</p></article>
-          <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Support</p><h2>Diagnostics</h2></div></div><div id="diagnostic-summary" class="diagnostic-box">Checking services…</div><div class="button-row"><button class="button" data-action="copy-diagnostics">Copy summary</button><a class="button" href="/api/diagnostics/logs" download>Download log bundle</a></div><p class="form-help">Log bundles leave out passwords, message text, and file names.</p></article>
+          <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Safekeeping</p><h2>Back up everything</h2></div></div><p>Saves every message, playlist, tag, picture, and video on the sign into one <b>.zip</b> file on this device.</p><p class="form-help" id="backup-estimate">Working out the size…</p><div class="button-row"><a class="button primary" id="backup-link" href="/api/backup" download data-guarded>⇩ Download backup</a></div><p class="form-help guard-hint" hidden>🔒 Backups need the operator PIN.</p><p class="form-help">On iPhone, open this page in Safari (not the Wi-Fi sign-in pop-up) so the file can be saved to Files. Passwords are never included.</p></article>
+          <article class="card wide"><div class="card-heading"><div><p class="eyebrow">Support</p><h2>Diagnostics</h2></div></div><div id="diagnostic-summary" class="diagnostic-box">Checking services…</div><div class="button-row"><button class="button" data-action="copy-diagnostics">Copy summary</button><a class="button" href="/api/diagnostics/logs" download data-guarded>Download log bundle</a></div><p class="form-help guard-hint" hidden>🔒 The log bundle needs the operator PIN.</p><p class="form-help">Log bundles leave out passwords, message text, and file names.</p></article>
         </div>
       </section>
     </main>

@@ -1,5 +1,5 @@
 [Unit]
-Description=Check Protest appliance health
+Description=Check MatrixMarquee appliance health
 After=protest.service
 
 [Service]
@@ -10,4 +10,3 @@ ExecStart=/opt/protest/current/scripts/health-check.sh
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=protest-health
-

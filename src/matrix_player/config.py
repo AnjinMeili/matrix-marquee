@@ -1,6 +1,6 @@
 """Application configuration loaded from environment variables."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import os
 from typing import Optional
@@ -54,6 +54,12 @@ class Settings:
     matrix_gpio_slowdown: int = 2
     fit_cache_dir: Optional[Path] = None
     fit_cache_max_bytes: int = 1024 * 1024 * 1024
+    # Kept out of repr so the PIN can never reach a log line.
+    operator_pin: Optional[str] = field(default=None, repr=False)
+
+    @property
+    def operator_state_path(self) -> Path:
+        return self.data_dir / "operator.json"
 
     @property
     def fit_cache_path(self) -> Path:
@@ -91,6 +97,7 @@ class Settings:
                 os.getenv("MATRIX_PLAYER_FIT_CACHE_DIR", str(data_dir / "fitted"))
             ).expanduser().resolve(),
             fit_cache_max_bytes=_positive_int("MATRIX_PLAYER_FIT_CACHE_MAX_BYTES", 1024 * 1024 * 1024),
+            operator_pin=os.getenv("MATRIX_PLAYER_OPERATOR_PIN") or None,
         )
 
     def ensure_directories(self) -> None:

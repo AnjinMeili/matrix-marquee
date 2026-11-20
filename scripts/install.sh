@@ -77,7 +77,7 @@ install -m 0644 "$release/deploy/logrotate/protest" /etc/logrotate.d/protest
 if [ -d /etc/avahi/services ]; then
     install -m 0644 "$release/deploy/avahi/protest.service" /etc/avahi/services/protest.service
     systemctl enable avahi-daemon >/dev/null 2>&1 || true
-    systemctl restart avahi-daemon || echo "warning: avahi-daemon did not start; protest.local will not resolve" >&2
+    systemctl restart avahi-daemon || echo "warning: avahi-daemon did not start; .local discovery will not work" >&2
 fi
 install -d -m 2755 /var/log/journal
 systemd-tmpfiles --create --prefix /var/log/journal
@@ -97,4 +97,3 @@ ls -1d /opt/protest/releases/*/ 2>/dev/null | sed 's:/$::' | sort -r | tail -n +
         [ "$(readlink -f "$old")" = "$current" ] || rm -rf -- "$old"
     done
 echo "installed release $release"
-

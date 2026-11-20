@@ -23,7 +23,7 @@ Yes. A pretrained sound classifier does this without training anything:
 
 ## Privacy
 
-At a protest this matters more than accuracy:
+At a public event this matters more than accuracy:
 
 - Classify on the device and **keep only counts and timestamps**. Never
   record, store, or transmit audio, and never transcribe speech.
